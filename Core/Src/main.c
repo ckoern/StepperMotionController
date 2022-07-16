@@ -23,6 +23,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
+#include "stm32f4xx.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -62,6 +63,7 @@ UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 MovementSetupTypeDef movement_setup;
+volatile int8_t button_pressed = 0;
 //int32_t current_position;
 //uint32_t max_speed;
 //uint32_t min_speed;
@@ -99,9 +101,21 @@ static void MX_TIM2_Init(void);
 //	return len;
 //
 //}
-int __io_putchar(int ch) {
-    ITM_SendChar(ch);
-    return ch;
+//int __io_putchar(int ch) {
+//    ITM_SendChar(ch);
+//    return ch;
+//}
+
+int _write(int file, char *ptr, int len)
+{
+	int DataIdx;
+
+	for (DataIdx = 0; DataIdx < len; DataIdx++)
+	{
+		//__io_putchar(*ptr++);
+		ITM_SendChar(*ptr++);
+	}
+	return len;
 }
 
 void calculate_ramp(MovementSetupTypeDef* handle){
@@ -127,6 +141,9 @@ void calculate_ramp(MovementSetupTypeDef* handle){
 void _set_speed(MovementSetupTypeDef* handle, uint32_t target_speed){
 	handle->tim_pulse->ARR = (BASE_CLK / target_speed / handle->scale) - 1;
 	handle->tim_pulse->CCR1 = BASE_CLK / target_speed / handle->scale / 2;
+	if (handle->tim_pulse->CNT >= handle->tim_pulse->ARR){
+		handle->tim_pulse->CNT=0; // reset the counter if the new ARR is lower than the current count
+	}
 
 }
 void update_speed(MovementSetupTypeDef* handle){
@@ -152,17 +169,23 @@ void update_speed(MovementSetupTypeDef* handle){
 
 	uint32_t target_speed;
 	if (current_nsteps > handle->nstep_startdec){
-		target_speed = current_speed - handle->dv_update;
-		if (target_speed < handle->min_speed){
-			target_speed = handle->min_speed;
-		}
+//		target_speed = current_speed - handle->dv_update;
+//		if (target_speed < handle->min_speed){
+//			target_speed = handle->min_speed;
+//		}
+		float ramp_frac = 1.0f * ( current_nsteps - handle->nstep_startdec ) / handle->nstep_stopacc;
+		target_speed = handle->max_speed - (uint32_t)( ramp_frac*(handle->max_speed - handle->min_speed) );
+		// v = v0 - dv*(s/ds),
 	} else if (current_nsteps < handle->nstep_stopacc){
-		target_speed = current_speed + handle->dv_update;
-		if (target_speed > handle->max_speed){
-			target_speed = handle->max_speed;
-		}
+//		target_speed = current_speed + handle->dv_update;
+//		if (target_speed > handle->max_speed){
+//			target_speed = handle->max_speed;
+//		}
+		float ramp_frac = 1.0f * current_nsteps  / handle->nstep_stopacc;
+		target_speed = handle->min_speed +  (uint32_t)( ramp_frac*(handle->max_speed - handle->min_speed) );
+
 	}else{
-		target_speed = current_speed;
+		target_speed = handle->max_speed;
 
 	}
 	printf("%lu: CNT: %lu, ARR: %lu, TS: %lu\n", last_tick, cnt, arr, target_speed);
@@ -172,9 +195,23 @@ void update_speed(MovementSetupTypeDef* handle){
 
 void start_move(MovementSetupTypeDef* handle){
 	  handle->tim_cnt->ARR = handle->nsteps - 1;
+	  handle->tim_cnt->CNT = 0;
 	  handle->in_move = 1;
+	  _set_speed(handle, handle->min_speed);
+
 	  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
 
+}
+
+void check_restart(MovementSetupTypeDef* handle){
+	if (button_pressed){
+		button_pressed = 0;
+		if (!handle->in_move){
+			printf("restart\n");
+			calculate_ramp(handle);
+			start_move(handle);
+		}
+	}
 }
 /* USER CODE END 0 */
 
@@ -249,6 +286,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  check_restart(&movement_setup);
 	  update_speed(&movement_setup);
 
     /* USER CODE END WHILE */
@@ -271,6 +309,7 @@ void SystemClock_Config(void)
   */
   __HAL_RCC_PWR_CLK_ENABLE();
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
+
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
@@ -287,6 +326,7 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+
   /** Initializes the CPU, AHB and APB buses clocks
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
@@ -490,6 +530,10 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LD2_GPIO_Port, &GPIO_InitStruct);
 
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
+
 }
 
 /* USER CODE BEGIN 4 */
@@ -504,6 +548,15 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
 	else if (htim == &htim1){
 //		HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
 	}
+}
+
+// EXTI Line9 External Interrupt ISR Handler CallBackFun
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    if(GPIO_Pin == B1_Pin) // If The INT Source Is EXTI Line9 (A9 Pin)
+    {
+    	button_pressed = 1;
+    }
 }
 /* USER CODE END 4 */
 
@@ -538,5 +591,3 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
-
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
