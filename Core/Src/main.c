@@ -24,25 +24,27 @@
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
 #include "stm32f4xx.h"
+#include "stepper_interface.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-typedef struct {
-	uint32_t nsteps;
-	uint8_t in_move;
-	int8_t direction;
-	uint32_t max_speed;
-	uint32_t min_speed;
-	uint32_t acceleration;
-	uint32_t nstep_stopacc;
-	uint32_t nstep_startdec;
-	uint32_t dv_update;
-	uint32_t scale;
-	TIM_TypeDef* tim_pulse;
-	TIM_TypeDef* tim_cnt;
-
-} MovementSetupTypeDef;
+//typedef struct {
+//	uint32_t nsteps;
+//	uint8_t in_move;
+//	int8_t direction;
+//	uint32_t max_speed;
+//	uint32_t min_speed;
+//	uint32_t acceleration;
+//	uint32_t nstep_stopacc;
+//	uint32_t nstep_startdec;
+//	uint32_t dv_update;
+//	uint32_t scale;
+//	TIM_TypeDef* tim_pulse;
+//	TIM_TypeDef* tim_cnt;
+//
+//} MovementSetupTypeDef;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -62,21 +64,13 @@ TIM_HandleTypeDef htim2;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-MovementSetupTypeDef movement_setup;
 volatile int8_t button_pressed = 0;
-//int32_t current_position;
-//uint32_t max_speed;
-//uint32_t min_speed;
-//uint32_t acceleration;
-//uint32_t n_steps;
-//uint32_t current_nsteps;
 uint32_t BASE_CLK = 5000; // TIM1 input frequency
 
-//uint32_t ramp_step_x1;
-//uint32_t ramp_step_x2;
-//uint32_t ramp_step_x3;
-//
-//uint8_t in_move = 0;
+stepper_motor_t stepper;
+stepper_counter_timer_t stepper_counter_timer;
+stepper_pulse_timer_t stepper_pulse_timer;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -92,19 +86,33 @@ static void MX_TIM2_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-//int _write(int32_t file, uint8_t *ptr, int32_t len)
-//{
-//	/* Implement your write code here, this is used by puts and printf for example */
-//	int i=0;
-//	for(i=0 ; i<len ; i++)
-//	ITM_SendChar((*ptr++));
-//	return len;
-//
-//}
-//int __io_putchar(int ch) {
-//    ITM_SendChar(ch);
-//    return ch;
-//}
+void init_stepper(){
+
+	stepper_pulse_timer.htim = &htim1;
+	stepper_pulse_timer.channel = TIM_CHANNEL_1;
+	stepper_pulse_timer.base_clk = BASE_CLK;
+
+	stepper_counter_timer.htim = &htim2;
+	stepper_counter_timer.channel = TIM_CHANNEL_1;
+
+
+	stepper.pulse_timer = &stepper_pulse_timer;
+	stepper.count_timer = &stepper_counter_timer;
+
+    stepper.pulse_timer->htim->Instance->CR1 &= ~TIM_CR1_CEN;
+
+	stepper.update_rate_ms = SPEED_UPDATE_RATE_MS;
+
+	stepper.ap.acceleration = 1;
+	stepper.ap.minimum_speed = 2;
+	stepper.ap.maximum_speed = 10;
+	stepper.ap.actual_position = 0;
+	stepper.ap.target_position = 0;
+	stepper.ap.actual_speed = 0;
+	stepper.ap.target_position_reached = 1;
+	stepper.ap.target_speed = stepper.ap.actual_speed;
+}
+
 
 int _write(int file, char *ptr, int len)
 {
@@ -118,98 +126,97 @@ int _write(int file, char *ptr, int len)
 	return len;
 }
 
-void calculate_ramp(MovementSetupTypeDef* handle){
-	// for min_speed = 0
-	// uint32_t deltaS_ramp = max_speed*max_speed/acceleration/2;
+//void calculate_ramp(MovementSetupTypeDef* handle){
+//	// for min_speed = 0
+//	// uint32_t deltaS_ramp = max_speed*max_speed/acceleration/2;
+//
+//	// for min_speed > 0
+//	uint32_t dv = handle->max_speed - handle->min_speed;
+//	uint32_t deltaS_ramp = dv*dv/handle->acceleration/2 + handle->min_speed * dv / handle->acceleration;
+//
+//	//deltaS_ramp is the number of steps that is needed to complete a (de)acceleration ramp
+//
+//	// if total length is shorter than combined acceleration/deacceleration
+//	// accelerate until half of the distance, then deacclerate
+//	if (2*deltaS_ramp > handle->nsteps){
+//		deltaS_ramp = handle->nsteps/2;
+//	}
+//	handle->nstep_stopacc = deltaS_ramp;
+//	handle->nstep_startdec = handle->nsteps - deltaS_ramp;
+//	handle->dv_update = handle->acceleration * SPEED_UPDATE_RATE_MS / 1000;
+//}
+//
+//void _set_speed(MovementSetupTypeDef* handle, uint32_t target_speed){
+//	handle->tim_pulse->ARR = (BASE_CLK / target_speed / handle->scale) - 1;
+//	handle->tim_pulse->CCR1 = BASE_CLK / target_speed / handle->scale / 2;
+//	if (handle->tim_pulse->CNT >= handle->tim_pulse->ARR){
+//		handle->tim_pulse->CNT=0; // reset the counter if the new ARR is lower than the current count
+//	}
+//
+//}
+//void update_speed(MovementSetupTypeDef* handle){
+//	static int32_t last_tick = 0;
+//	int32_t tick = HAL_GetTick();
+//	if (last_tick > tick){
+//		// ticker overflow, unlikely to ever occur for 1ms ticks and 32 bit
+//		last_tick = 0;
+//	}
+//	if ( !(tick - last_tick >= SPEED_UPDATE_RATE_MS) ){
+//		return;
+//	}
+//	last_tick = tick;
+//
+//
+//	if (!handle->in_move){
+//		return;
+//	}
+//	uint32_t arr = handle->tim_pulse->ARR;
+//	uint32_t cnt = handle->tim_cnt->CNT;
+//	uint32_t current_speed = BASE_CLK /  (arr+1);
+//	uint32_t current_nsteps = cnt;
+//
+//	uint32_t target_speed;
+//	if (current_nsteps > handle->nstep_startdec){
+////		target_speed = current_speed - handle->dv_update;
+////		if (target_speed < handle->min_speed){
+////			target_speed = handle->min_speed;
+////		}
+//		float ramp_frac = 1.0f * ( current_nsteps - handle->nstep_startdec ) / handle->nstep_stopacc;
+//		target_speed = handle->max_speed - (uint32_t)( ramp_frac*(handle->max_speed - handle->min_speed) );
+//		// v = v0 - dv*(s/ds),
+//	} else if (current_nsteps < handle->nstep_stopacc){
+////		target_speed = current_speed + handle->dv_update;
+////		if (target_speed > handle->max_speed){
+////			target_speed = handle->max_speed;
+////		}
+//		float ramp_frac = 1.0f * current_nsteps  / handle->nstep_stopacc;
+//		target_speed = handle->min_speed +  (uint32_t)( ramp_frac*(handle->max_speed - handle->min_speed) );
+//
+//	}else{
+//		target_speed = handle->max_speed;
+//
+//	}
+//	printf("%lu: CNT: %lu, ARR: %lu, TS: %lu\n", last_tick, cnt, arr, target_speed);
+//	_set_speed(handle, target_speed);
+//}
+//
+//
+//void start_move(MovementSetupTypeDef* handle){
+//	  handle->tim_cnt->ARR = handle->nsteps - 1;
+//	  handle->tim_cnt->CNT = 0;
+//	  handle->in_move = 1;
+//	  _set_speed(handle, handle->min_speed);
+//
+//	  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+//
+//}
 
-	// for min_speed > 0
-	uint32_t dv = handle->max_speed - handle->min_speed;
-	uint32_t deltaS_ramp = dv*dv/handle->acceleration/2 + handle->min_speed * dv / handle->acceleration;
-
-	//deltaS_ramp is the number of steps that is needed to complete a (de)acceleration ramp
-
-	// if total length is shorter than combined acceleration/deacceleration
-	// accelerate until half of the distance, then deacclerate
-	if (2*deltaS_ramp > handle->nsteps){
-		deltaS_ramp = handle->nsteps/2;
-	}
-	handle->nstep_stopacc = deltaS_ramp;
-	handle->nstep_startdec = handle->nsteps - deltaS_ramp;
-	handle->dv_update = handle->acceleration * SPEED_UPDATE_RATE_MS / 1000;
-}
-
-void _set_speed(MovementSetupTypeDef* handle, uint32_t target_speed){
-	handle->tim_pulse->ARR = (BASE_CLK / target_speed / handle->scale) - 1;
-	handle->tim_pulse->CCR1 = BASE_CLK / target_speed / handle->scale / 2;
-	if (handle->tim_pulse->CNT >= handle->tim_pulse->ARR){
-		handle->tim_pulse->CNT=0; // reset the counter if the new ARR is lower than the current count
-	}
-
-}
-void update_speed(MovementSetupTypeDef* handle){
-	static int32_t last_tick = 0;
-	int32_t tick = HAL_GetTick();
-	if (last_tick > tick){
-		// ticker overflow, unlikely to ever occur for 1ms ticks and 32 bit
-		last_tick = 0;
-	}
-	if ( !(tick - last_tick >= SPEED_UPDATE_RATE_MS) ){
-		return;
-	}
-	last_tick = tick;
-
-
-	if (!handle->in_move){
-		return;
-	}
-	uint32_t arr = handle->tim_pulse->ARR;
-	uint32_t cnt = handle->tim_cnt->CNT;
-	uint32_t current_speed = BASE_CLK /  (arr+1);
-	uint32_t current_nsteps = cnt;
-
-	uint32_t target_speed;
-	if (current_nsteps > handle->nstep_startdec){
-//		target_speed = current_speed - handle->dv_update;
-//		if (target_speed < handle->min_speed){
-//			target_speed = handle->min_speed;
-//		}
-		float ramp_frac = 1.0f * ( current_nsteps - handle->nstep_startdec ) / handle->nstep_stopacc;
-		target_speed = handle->max_speed - (uint32_t)( ramp_frac*(handle->max_speed - handle->min_speed) );
-		// v = v0 - dv*(s/ds),
-	} else if (current_nsteps < handle->nstep_stopacc){
-//		target_speed = current_speed + handle->dv_update;
-//		if (target_speed > handle->max_speed){
-//			target_speed = handle->max_speed;
-//		}
-		float ramp_frac = 1.0f * current_nsteps  / handle->nstep_stopacc;
-		target_speed = handle->min_speed +  (uint32_t)( ramp_frac*(handle->max_speed - handle->min_speed) );
-
-	}else{
-		target_speed = handle->max_speed;
-
-	}
-	printf("%lu: CNT: %lu, ARR: %lu, TS: %lu\n", last_tick, cnt, arr, target_speed);
-	_set_speed(handle, target_speed);
-}
-
-
-void start_move(MovementSetupTypeDef* handle){
-	  handle->tim_cnt->ARR = handle->nsteps - 1;
-	  handle->tim_cnt->CNT = 0;
-	  handle->in_move = 1;
-	  _set_speed(handle, handle->min_speed);
-
-	  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
-
-}
-
-void check_restart(MovementSetupTypeDef* handle){
+void check_restart(stepper_motor_t* handle){
 	if (button_pressed){
 		button_pressed = 0;
-		if (!handle->in_move){
+		if (handle->ap.target_position_reached){
 			printf("restart\n");
-			calculate_ramp(handle);
-			start_move(handle);
+			stepper_start_movement(handle, handle->ap.actual_position + 150);
 		}
 	}
 }
@@ -251,15 +258,6 @@ int main(void)
   TIM1->ARR = 50000;
   TIM1->CCR1 = 25000;
 
-  movement_setup.tim_cnt = TIM2;
-  movement_setup.tim_pulse = TIM1;
-  movement_setup.acceleration = 1;
-  movement_setup.min_speed = 2;
-  movement_setup.max_speed = 10;
-
-  movement_setup.nsteps = 150;
-
-  movement_setup.scale = 1;
 
 //  current_position = 0;
 //  acceleration = 1;
@@ -267,7 +265,6 @@ int main(void)
 //  min_speed = 2;
 //  n_steps = 100;
 //  _set_speed(min_speed);
-  _set_speed(&movement_setup, movement_setup.min_speed);
   HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
   HAL_Delay(1000);
   HAL_TIM_Base_Start(&htim1);
@@ -277,17 +274,20 @@ int main(void)
 
   HAL_TIM_Base_Start_IT(&htim2);
   HAL_TIM_IC_Start(&htim2, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
 
-  calculate_ramp(&movement_setup);
-  start_move(&movement_setup);
+  init_stepper();
+
+  stepper_start_movement(&stepper, 150);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  check_restart(&movement_setup);
-	  update_speed(&movement_setup);
+	  check_restart(&stepper);
+	  //update_speed(&movement_setup);
+	  stepper_update_loop(&stepper);
 
     /* USER CODE END WHILE */
 
@@ -541,9 +541,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
 {
 	if (htim == &htim2){
 		// TODO Stop TIM1
-	    HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_1);
+	    //HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_1);
 		HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
-		movement_setup.in_move = 0;
+		stepper.mp.finish_move = 1;
 	}
 	else if (htim == &htim1){
 //		HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
