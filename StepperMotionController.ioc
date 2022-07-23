@@ -48,6 +48,7 @@ NVIC.SysTick_IRQn=true\:0\:0\:true\:false\:true\:true\:true\:false
 NVIC.TIM1_CC_IRQn=true\:0\:0\:false\:false\:true\:true\:true\:true
 NVIC.TIM1_UP_TIM10_IRQn=true\:15\:0\:false\:false\:true\:false\:true\:true
 NVIC.TIM2_IRQn=true\:0\:0\:false\:false\:true\:true\:true\:true
+NVIC.USART2_IRQn=true\:0\:0\:false\:false\:true\:true\:true\:true
 NVIC.UsageFault_IRQn=true\:0\:0\:false\:false\:true\:true\:false\:false
 PA13.GPIOParameters=GPIO_Label
 PA13.GPIO_Label=TMS

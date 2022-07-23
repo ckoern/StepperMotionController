@@ -65,12 +65,14 @@ UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 volatile int8_t button_pressed = 0;
+volatile int8_t command_received = 0;
+volatile int8_t reply_sent = 1; // set to one, so first com_loop will start receive interrupt
 uint32_t BASE_CLK = 5000; // TIM1 input frequency
 
 stepper_motor_t stepper;
 stepper_counter_timer_t stepper_counter_timer;
 stepper_pulse_timer_t stepper_pulse_timer;
-
+stepper_com_buffer_t stepper_com_buffer;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -220,6 +222,22 @@ void check_restart(stepper_motor_t* handle){
 		}
 	}
 }
+
+void uart_communication(){
+  if (reply_sent){
+    //TODO start new receive
+	reply_sent = 0;
+    HAL_UART_Receive_IT(&huart2, stepper_com_buffer.cmd_buffer, sizeof(stepper_com_buffer.cmd_buffer));
+
+  }
+  if (command_received){
+	  command_received = 0;
+    stepper_com_action(&stepper, &stepper_com_buffer);
+    HAL_UART_Transmit_IT(&huart2, stepper_com_buffer.reply_buffer, sizeof (stepper_com_buffer.reply_buffer));
+
+    //TODO start new transmit
+  }
+}
 /* USER CODE END 0 */
 
 /**
@@ -285,6 +303,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  uart_communication();
 	  check_restart(&stepper);
 	  //update_speed(&movement_setup);
 	  stepper_update_loop(&stepper);
@@ -556,6 +575,19 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     if(GPIO_Pin == B1_Pin) // If The INT Source Is EXTI Line9 (A9 Pin)
     {
     	button_pressed = 1;
+    }
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart == &huart2){
+      command_received = 1;
+    }
+}
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart == &huart2){
+      reply_sent = 1;
     }
 }
 /* USER CODE END 4 */

@@ -5,8 +5,13 @@
 #include  <stdint.h>
 #include "stm32f4xx.h"
 
+
+#define HOME_SWITCH  ( 1 << 0 )
+#define LEFT_SWITCH  ( 1 << 1 )
+#define RIGHT_SWITCH ( 1 << 2 )
+
 typedef struct {
-    uint8_t address;
+    uint8_t module_address;
     uint8_t cmd_id;
     uint8_t cmd_type;
     uint8_t cmd_bank;
@@ -16,7 +21,12 @@ typedef struct {
 } stepper_command_t;
 
 typedef struct {
-
+    uint8_t reply_address;
+    uint8_t module_address;
+    uint8_t status_code;
+    uint8_t cmd_id;
+    uint32_t value;
+    uint8_t checksum;
 } stepper_reply_t;
 
 typedef struct{
@@ -57,12 +67,12 @@ typedef struct {
 
 typedef struct {
     uint32_t nsteps;
-    uint8_t direction;
+    int8_t direction;
     uint32_t nsteps_ramp;
     uint8_t abort_move;
     uint8_t finish_move;
     uint32_t last_tick;
-    uint32_t start_position;
+    int32_t start_position;
 } stepper_motion_params_t;
 
 
@@ -75,19 +85,12 @@ typedef struct {
     uint32_t update_rate_ms;
 } stepper_motor_t;
 
+typedef struct {
+    uint8_t cmd_buffer[9];
+    uint8_t reply_buffer[9];
+} stepper_com_buffer_t;
 
-// functions beginning with stepper_ are public
-// functions beginning with istepper_ are internal
-void stepper_start_movement( stepper_motor_t* motor, int32_t target );
-void stepper_stop_movement( stepper_motor_t* motor );
-void stepper_update_loop(stepper_motor_t* motor);
-
-void istepper_calculate_motion_params(stepper_motor_t* motor);
-void istepper_set_pulse_timer(stepper_motor_t* handle);
-void istepper_finish_movement(stepper_motor_t* motor);
-
-
-enum AxisParamTypes {
+typedef enum {
     AP_TARGET_POS = 0,
     AP_ACTUAL_POS = 1,
     AP_TARGET_VEL = 2,
@@ -106,26 +109,41 @@ enum AxisParamTypes {
     AP_MICROSTEP_RESOLUTION = 140,
     AP_ENDS_DISTANCE = 196,
     AP_REVERSE_SHAFT = 251,
-};
+} AxisParamType;
 
 
-enum StepperCommands {
-    STOP = 3,
-    MOVE = 4,
-    SETAP = 5,
-    GETAP = 6,
-    REFSEARCH = 13,
-};
+typedef enum {
+    CMD_STOP = 3,
+    CMD_MOVE = 4,
+    CMD_SETAP = 5,
+    CMD_GETAP = 6,
+    CMD_REFSEARCH = 13,
+} StepperCommand;
 
 
-enum StatusCodes{
-    OK = 100,
-    WRONG_CHECKSUM = 1,
-    INVALID_CMD = 2,
-    INVALID_TYPE = 3,
-    INVALID_VALUE = 4
-};
+typedef enum{
+    SSC_OK = 100,
+    SSC_WRONG_CHECKSUM = 1,
+    SSC_INVALID_CMD = 2,
+    SSC_INVALID_TYPE = 3,
+    SSC_INVALID_VALUE = 4
+} StepperStatusCode;
 
+// functions beginning with stepper_ are public
+// functions beginning with istepper_ are internal
+void stepper_start_movement( stepper_motor_t* motor, int32_t target );
+void stepper_stop_movement( stepper_motor_t* motor );
+void stepper_update_loop(stepper_motor_t* motor);
 
+void stepper_com_action(stepper_motor_t* motor, stepper_com_buffer_t* com_buffer);
+void stepper_handle_command( stepper_motor_t* motor, stepper_command_t* cmd, stepper_reply_t* reply );
+void stepper_decode_command( uint8_t* cmd_buffer, stepper_command_t* cmd );
+void stepper_encode_reply( uint8_t* reply_buffer, stepper_reply_t* cmd );
+
+void istepper_calculate_motion_params(stepper_motor_t* motor);
+void istepper_set_pulse_timer(stepper_motor_t* handle);
+void istepper_finish_movement(stepper_motor_t* motor);
+
+uint32_t stepper_get_axis_param(stepper_motor_t* motor, AxisParamType param);
 
 #endif

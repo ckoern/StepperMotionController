@@ -1,12 +1,13 @@
 #include "stepper_interface.h"
+#include <string.h>
 
 void istepper_calculate_motion_params(stepper_motor_t* motor){
 
     motor->mp.start_position = motor->ap.actual_position;
     motor->mp.abort_move = 0;
     motor->mp.finish_move = 0;
-    motor->mp.direction = motor->ap.target_position > motor->ap.actual_position;
-    if (motor->mp.direction){
+    motor->mp.direction = motor->ap.target_position > motor->ap.actual_position? 1 : -1;
+    if (motor->mp.direction > 0){
         motor->mp.nsteps = motor->ap.target_position - motor->ap.actual_position;
     }
     else{
@@ -61,23 +62,25 @@ void istepper_finish_movement(stepper_motor_t* motor){
     //HAL_TIM_PWM_Stop(motor->pulse_timer->htim, motor->pulse_timer->channel);
     motor->pulse_timer->htim->Instance->CR1 &= ~TIM_CR1_CEN;
 
-	motor->ap.actual_position = motor->mp.start_position + motor->mp.nsteps;
+	motor->ap.actual_position = motor->mp.start_position + motor->mp.direction * motor->mp.nsteps;
     motor->ap.actual_speed = 0;
 	motor->ap.target_position_reached = 1;
 	motor->mp.finish_move = 0;
 }
 
 
-void stepper_abort_movement( stepper_motor_t* motor ){
+void stepper_stop_movement( stepper_motor_t* motor ){
     //HAL_TIM_PWM_Stop(motor->pulse_timer->htim, motor->pulse_timer->channel);
     motor->pulse_timer->htim->Instance->CR1 &= ~TIM_CR1_CEN;
 
 	uint32_t current_nsteps = motor->count_timer->htim->Instance->CNT;
-    motor->ap.actual_position = motor->mp.start_position + current_nsteps;
+    motor->ap.actual_position = motor->mp.start_position + motor->mp.direction * current_nsteps;
     motor->ap.target_position = motor->ap.actual_position;
     motor->ap.actual_speed = 0; 
     motor->ap.target_position_reached = 1;
 }
+
+
 
 void stepper_update_loop(stepper_motor_t* motor){
     if (motor->ap.target_position_reached){
@@ -103,7 +106,7 @@ void stepper_update_loop(stepper_motor_t* motor){
         //uint32_t arr = motor->pulse_timer->htim->Instance->ARR;
 	    uint32_t current_nsteps = motor->count_timer->htim->Instance->CNT;
 
-        motor->ap.actual_position = motor->mp.start_position + current_nsteps;
+        motor->ap.actual_position = motor->mp.start_position + motor->mp.direction * current_nsteps;
 
         uint32_t new_speed;
         if (current_nsteps >= ( motor->mp.nsteps - motor->mp.nsteps_ramp )){
@@ -123,4 +126,166 @@ void stepper_update_loop(stepper_motor_t* motor){
         motor->ap.actual_speed = new_speed;
         istepper_set_pulse_timer(motor);
     }
+}
+
+
+
+void stepper_handle_command( stepper_motor_t* motor, stepper_command_t* cmd, stepper_reply_t* reply ){
+    reply->cmd_id = cmd->cmd_id;
+    reply->status_code = SSC_OK;
+    switch( cmd->cmd_id ){
+        case CMD_STOP:{
+            if (!motor->ap.target_position_reached){
+                stepper_stop_movement(motor);
+            }
+            break;
+        }
+        case CMD_MOVE: {
+            if (motor->ap.target_position_reached){
+                int32_t target_pos;
+                memcpy( &target_pos, &(cmd->value), 4 );
+                if (cmd->cmd_type == 1){
+                    target_pos += motor->ap.actual_position;
+                }
+                stepper_start_movement(motor, target_pos);
+            }
+            else{
+                reply->status_code = SSC_INVALID_CMD;
+            }
+            break;
+        }
+
+        case CMD_SETAP: {
+            break;
+        }
+
+        case CMD_GETAP:{
+            reply->value = stepper_get_axis_param(motor, cmd->cmd_type);
+            break;
+        }
+
+        case CMD_REFSEARCH :{
+            break;
+        }
+
+        default: {
+            reply->status_code = SSC_INVALID_CMD;
+        }
+    }
+}
+
+uint32_t stepper_get_axis_param(stepper_motor_t* motor, AxisParamType param){
+    
+    uint32_t ret_val;
+    switch (param){
+        case AP_TARGET_POS:{
+            memcpy(&ret_val, &(motor->ap.target_position),4);
+            break;
+        }
+        case AP_ACTUAL_POS:{
+            memcpy(&ret_val, &(motor->ap.actual_position),4);
+            break;
+        }
+        case AP_TARGET_VEL:{
+            memcpy(&ret_val, &(motor->ap.target_speed),4);
+            break;
+        }
+        case AP_ACTUAL_VEL:{
+            memcpy(&ret_val, &(motor->ap.actual_speed),4);
+            break;
+        }
+        case AP_MAX_VEL:{
+            memcpy(&ret_val, &(motor->ap.maximum_speed),4);
+            break;
+        }
+        case AP_MAX_ACC:{
+            memcpy(&ret_val, &(motor->ap.acceleration),4);
+            break;
+        }
+        case AP_POS_REACHED:{
+            ret_val = motor->ap.target_position_reached;
+            break;
+        }
+        case AP_HOME_SW_STATE:{
+            ret_val = motor->ap.limit_states & HOME_SWITCH;
+        }
+        case AP_RIGHT_SW_STATE:{
+            ret_val = motor->ap.limit_states & RIGHT_SWITCH;
+            break;
+        }
+        case AP_LEFT_SW_STATE:{
+            ret_val = motor->ap.limit_states & LEFT_SWITCH;
+            break;
+        }
+        case AP_RIGHT_SW_DISABLE:{
+            ret_val = motor->ap.limits_disabled & RIGHT_SWITCH;
+            break;
+        }
+        case AP_LEFT_SW_DISABLE:{
+            ret_val = motor->ap.limits_disabled & LEFT_SWITCH;
+            break;
+        }
+        case AP_SWAP_LIMITS:{
+            ret_val = motor->ap.limits_switched;
+            break;
+        }
+        case AP_RIGHT_SW_POLAR:{
+            ret_val = motor->ap.limits_polarity & RIGHT_SWITCH;
+            break;
+        }
+        case AP_LEFT_SW_POLAR:{
+            ret_val = motor->ap.limits_polarity & LEFT_SWITCH;
+            break;
+        }
+        case AP_MICROSTEP_RESOLUTION:{
+            ret_val = motor->ap.microstep_resolution;
+        }
+        case AP_ENDS_DISTANCE:{
+            ret_val = motor->ap.end_switch_distance;
+            break;
+        }
+        case AP_REVERSE_SHAFT:{
+            ret_val = motor->ap.reverse_shaft;
+            break;
+        }
+    };
+    return ret_val;
+}
+
+void stepper_decode_command( uint8_t* cmd_buffer, stepper_command_t* cmd ){
+    cmd->module_address = cmd_buffer[0];
+    cmd->cmd_id = cmd_buffer[1];
+    cmd->cmd_type = cmd_buffer[2];
+    cmd->cmd_bank = cmd_buffer[3];
+    cmd->value = (cmd_buffer[4] << 24 )
+               + (cmd_buffer[5] << 16 )
+               + (cmd_buffer[6] << 8  )
+               + cmd_buffer[7];
+    cmd->checksum = cmd_buffer[8];
+}
+void stepper_encode_reply( uint8_t* reply_buffer, stepper_reply_t* reply ){
+    reply_buffer[0] = reply->reply_address;
+    reply_buffer[1] = reply->module_address;
+    reply_buffer[2] = reply->status_code;
+    reply_buffer[3] = reply->cmd_id;
+    reply_buffer[4] = (reply->value >> 24) & 0xff;
+    reply_buffer[5] = (reply->value >> 16) & 0xff;
+    reply_buffer[6] = (reply->value >>  8) & 0xff;
+    reply_buffer[7] = (reply->value)       & 0xff;
+    uint8_t checksum = 0;
+    for (uint8_t i = 0; i < 8; ++i){
+        checksum += reply_buffer[i];
+    }
+    reply_buffer[8] = checksum;
+}
+
+
+
+void stepper_com_action(stepper_motor_t* motor, stepper_com_buffer_t* com_buffer){
+    static stepper_command_t cmd;
+    static stepper_reply_t reply;
+
+    stepper_decode_command( com_buffer->cmd_buffer, &cmd );
+    stepper_handle_command(motor, &cmd, &reply);
+    stepper_encode_reply(com_buffer->reply_buffer, &reply);
 }
