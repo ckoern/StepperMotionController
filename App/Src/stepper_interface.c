@@ -108,7 +108,7 @@ void stepper_update_loop(stepper_motor_t* motor){
         uint32_t new_speed;
         if (current_nsteps >= ( motor->mp.nsteps - motor->mp.nsteps_ramp )){
             //decceleration ramp
-            float ramp_frac = 1.0f * ( current_nsteps - motor->mp.nsteps_ramp ) / motor->mp.nsteps_ramp;
+            float ramp_frac = 1.0f * ( current_nsteps - ( motor->mp.nsteps - motor->mp.nsteps_ramp) ) / motor->mp.nsteps_ramp;
             new_speed = motor->ap.maximum_speed - (uint32_t)( ramp_frac*(motor->ap.maximum_speed - motor->ap.minimum_speed) );
         } else if (current_nsteps < motor->mp.nsteps_ramp){
             // acceleration ramp
