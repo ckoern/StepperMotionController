@@ -51,6 +51,8 @@ void stepper_start_movement( stepper_motor_t* motor, int32_t target ){
     istepper_calculate_motion_params(motor);
     motor->count_timer->htim->Instance->ARR = motor->mp.nsteps - 1;
     motor->count_timer->htim->Instance->CNT = 0;
+
+    // TODO : Set direction and MS pins
     istepper_set_pulse_timer(motor);
 	//HAL_TIM_PWM_Start(motor->pulse_timer->htim, motor->pulse_timer->channel);
     //motor->pulse_timer->htim->Instance->CR1 |= TIM_CR1_CEN;
@@ -150,6 +152,51 @@ uint8_t istepper_limit_halt_move(stepper_motor_t* motor){
     return 0;
 }
 
+void istepper_set_microstepping_pins(stepper_motor_t* handle){
+    switch (handle->ap.microstep_resolution){
+        case 0:
+            HAL_GPIO_WritePin(handle->io->port, handle->io->pin_ms0, GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(handle->io->port, handle->io->pin_ms1, GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(handle->io->port, handle->io->pin_ms2, GPIO_PIN_RESET);
+            break;
+
+        case 1:
+            HAL_GPIO_WritePin(handle->io->port, handle->io->pin_ms0, GPIO_PIN_SET);
+            HAL_GPIO_WritePin(handle->io->port, handle->io->pin_ms1, GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(handle->io->port, handle->io->pin_ms2, GPIO_PIN_RESET);
+            break;
+        
+        case 2:
+            HAL_GPIO_WritePin(handle->io->port, handle->io->pin_ms0, GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(handle->io->port, handle->io->pin_ms1, GPIO_PIN_SET);
+            HAL_GPIO_WritePin(handle->io->port, handle->io->pin_ms2, GPIO_PIN_RESET);
+            break;
+
+        case 3:
+            HAL_GPIO_WritePin(handle->io->port, handle->io->pin_ms0, GPIO_PIN_SET);
+            HAL_GPIO_WritePin(handle->io->port, handle->io->pin_ms1, GPIO_PIN_SET);
+            HAL_GPIO_WritePin(handle->io->port, handle->io->pin_ms2, GPIO_PIN_RESET);
+            break;
+
+        case 4:
+            HAL_GPIO_WritePin(handle->io->port, handle->io->pin_ms0, GPIO_PIN_SET);
+            HAL_GPIO_WritePin(handle->io->port, handle->io->pin_ms1, GPIO_PIN_SET);
+            HAL_GPIO_WritePin(handle->io->port, handle->io->pin_ms2, GPIO_PIN_SET);
+            break;
+    }
+}
+
+void istepper_set_direction_pin(stepper_motor_t* handle){
+
+    HAL_GPIO_WritePin(
+        handle->io->port, 
+        handle->io->pin_direction, 
+        handle->mp.direction > 0? GPIO_PIN_SET : GPIO_PIN_RESET
+    );
+
+}
+
+
 void stepper_handle_command( stepper_motor_t* motor, stepper_command_t* cmd, stepper_reply_t* reply ){
     reply->cmd_id = cmd->cmd_id;
     reply->status_code = SSC_OK;
@@ -176,7 +223,8 @@ void stepper_handle_command( stepper_motor_t* motor, stepper_command_t* cmd, ste
         }
 
         case CMD_SETAP: {
-            break;
+            reply->status_code = stepper_set_axis_param(motor, cmd->cmd_type, cmd->value);
+            reply->value = stepper_get_axis_param(motor, cmd->cmd_type);
         }
 
         case CMD_GETAP:{
@@ -274,7 +322,7 @@ uint32_t stepper_get_axis_param(stepper_motor_t* motor, AxisParamType param){
     return ret_val;
 }
 
-StepperStatusCode set_get_axis_param(stepper_motor_t* motor, AxisParamType param, uint32_t value_enc){
+StepperStatusCode stepper_set_axis_param(stepper_motor_t* motor, AxisParamType param, uint32_t value_enc){
     
     switch (param){
         case AP_TARGET_POS:{

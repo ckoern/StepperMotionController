@@ -75,13 +75,23 @@ typedef struct {
     int32_t start_position;
 } stepper_motion_params_t;
 
-
+typedef struct {
+    GPIO_TypeDef* port;
+    uint16_t pin_left_limit;
+    uint16_t pin_right_limit;
+    uint16_t pin_direction;
+    uint16_t pin_ms0;
+    uint16_t pin_ms1;
+    uint16_t pin_ms2;
+    
+} stepper_motor_gpio_t;
 
 typedef struct {
     stepper_axis_params_t ap;
     stepper_motion_params_t mp;
     stepper_pulse_timer_t* pulse_timer;
     stepper_counter_timer_t* count_timer;   
+    stepper_motor_gpio_t* io;
     uint32_t update_rate_ms;
 } stepper_motor_t;
 
@@ -144,6 +154,10 @@ void istepper_calculate_motion_params(stepper_motor_t* motor);
 void istepper_set_pulse_timer(stepper_motor_t* handle);
 void istepper_finish_movement(stepper_motor_t* motor);
 uint8_t istepper_limit_halt_move(stepper_motor_t* motor);
+void istepper_set_microstepping_pins(stepper_motor_t* handle);
+void istepper_set_direction_pin(stepper_motor_t* handle);
+
+
 
 static inline void istepper_enable_pulse_tim(stepper_motor_t* motor){
      motor->pulse_timer->htim->Instance->CR1 |= TIM_CR1_CEN;
@@ -153,6 +167,6 @@ static inline void istepper_disable_pulse_tim(stepper_motor_t* motor){
      motor->pulse_timer->htim->Instance->CR1 &= ~TIM_CR1_CEN;
 }
 uint32_t stepper_get_axis_param(stepper_motor_t* motor, AxisParamType param);
-StepperStatusCode set_get_axis_param(stepper_motor_t* motor, AxisParamType param, uint32_t value_enc);
+StepperStatusCode stepper_set_axis_param(stepper_motor_t* motor, AxisParamType param, uint32_t value_enc);
 
 #endif

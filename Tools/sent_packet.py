@@ -54,7 +54,7 @@ elif args.cmd == "MVP":
 elif args.cmd == "SAP":
     name = args.type
     pid, pid_type = axis_params[name]
-    cmd_data = struct.pack( f">BBBB{pid_type}B", 0,5,pid,0,0,0 )
+    cmd_data = struct.pack( f">BBBB{pid_type}B", 0,5,pid,0,args.value,0 )
     ser.write(cmd_data)
 
     reply = ser.read(9)
