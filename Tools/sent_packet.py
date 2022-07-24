@@ -12,6 +12,12 @@ parser.add_argument("-t", "--type", type = str)
 
 args = parser.parse_args()
 
+
+def add_checksum(packed_data):
+    byte_data = struct.unpack("8B",packed_data)
+    checksum  = sum(byte_data) & 0xff
+    return struct.pack( "9B", *byte_data, checksum )
+
 axis_params = dict(
     AP_TARGET_POS = (0, "i"),
     AP_ACTUAL_POS = (1, "i"),
@@ -37,8 +43,8 @@ ser = serial.Serial(args.com_port, 115200, timeout=2)
 
 if args.cmd == "GAP":
     for name, (pid, pid_type) in axis_params.items(): 
-        cmd_data = struct.pack( f">BBBB{pid_type}B", 0,6,pid,0,0,0 )
-        ser.write(cmd_data)
+        cmd_data = struct.pack( f">BBBB{pid_type}", 0,6,pid,0,0 )
+        ser.write(add_checksum(cmd_data))
 
         reply = ser.read(9)
         _,_,sc,_,v,_ = struct.unpack( f'>BBBB{pid_type}B', reply )
@@ -46,8 +52,8 @@ if args.cmd == "GAP":
 
 elif args.cmd == "MVP":
     target = args.value
-    cmd_data = struct.pack( ">BBBBiB", 0,4,0,0,target,0 )
-    ser.write(cmd_data)
+    cmd_data = struct.pack( ">BBBBi", 0,4,0,0,target )
+    ser.write(add_checksum(cmd_data))
 
     reply = ser.read(9)
     print( f"{struct.unpack( '>BBBBIB', reply )}" )
@@ -55,8 +61,8 @@ elif args.cmd == "MVP":
 elif args.cmd == "SAP":
     name = args.type
     pid, pid_type = axis_params[name]
-    cmd_data = struct.pack( f">BBBB{pid_type}B", 0,5,pid,0,args.value,0 )
-    ser.write(cmd_data)
+    cmd_data = struct.pack( f">BBBB{pid_type}", 0,5,pid,0,args.value )
+    ser.write(add_checksum(cmd_data))
 
     reply = ser.read(9)
     _,_,sc,_,v,_ = struct.unpack( f'>BBBB{pid_type}B', reply )
@@ -64,8 +70,8 @@ elif args.cmd == "SAP":
 
 elif args.cmd == "MST":
     target = args.value
-    cmd_data = struct.pack( ">BBBBiB", 0,3,0,0,0,0 )
-    ser.write(cmd_data)
+    cmd_data = struct.pack( ">BBBBi", 0,3,0,0,0 )
+    ser.write(add_checksum(cmd_data))
 
     reply = ser.read(9)
     print( f"{struct.unpack( '>BBBBIB', reply )}" )

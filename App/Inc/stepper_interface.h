@@ -148,7 +148,7 @@ void stepper_update_loop(stepper_motor_t* motor);
 
 void stepper_com_action(stepper_motor_t* motor, stepper_com_buffer_t* com_buffer);
 void stepper_handle_command( stepper_motor_t* motor, stepper_command_t* cmd, stepper_reply_t* reply );
-void stepper_decode_command( uint8_t* cmd_buffer, stepper_command_t* cmd );
+StepperStatusCode stepper_decode_command( uint8_t* cmd_buffer, stepper_command_t* cmd );
 void stepper_encode_reply( uint8_t* reply_buffer, stepper_reply_t* cmd );
 
 void istepper_calculate_motion_params(stepper_motor_t* motor);

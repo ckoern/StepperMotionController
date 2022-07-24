@@ -428,7 +428,7 @@ StepperStatusCode stepper_set_axis_param(stepper_motor_t* motor, AxisParamType p
 }
 
 
-void stepper_decode_command( uint8_t* cmd_buffer, stepper_command_t* cmd ){
+StepperStatusCode stepper_decode_command( uint8_t* cmd_buffer, stepper_command_t* cmd ){
     cmd->module_address = cmd_buffer[0];
     cmd->cmd_id = cmd_buffer[1];
     cmd->cmd_type = cmd_buffer[2];
@@ -438,6 +438,15 @@ void stepper_decode_command( uint8_t* cmd_buffer, stepper_command_t* cmd ){
                + (cmd_buffer[6] << 8  )
                + cmd_buffer[7];
     cmd->checksum = cmd_buffer[8];
+    uint8_t cksm = 0;
+    for (uint8_t i = 0; i<8;++i){
+        cksm += cmd_buffer[i];
+    }
+    if (cksm == cmd->checksum){
+        return SSC_OK;
+    }else{
+        return SSC_WRONG_CHECKSUM;
+    }
 }
 void stepper_encode_reply( uint8_t* reply_buffer, stepper_reply_t* reply ){
     reply_buffer[0] = reply->reply_address;
@@ -461,7 +470,9 @@ void stepper_com_action(stepper_motor_t* motor, stepper_com_buffer_t* com_buffer
     static stepper_command_t cmd;
     static stepper_reply_t reply;
 
-    stepper_decode_command( com_buffer->cmd_buffer, &cmd );
-    stepper_handle_command(motor, &cmd, &reply);
+    reply.status_code = stepper_decode_command( com_buffer->cmd_buffer, &cmd );
+    if (reply.status_code == SSC_OK){
+        stepper_handle_command(motor, &cmd, &reply);
+    }
     stepper_encode_reply(com_buffer->reply_buffer, &reply);
 }
