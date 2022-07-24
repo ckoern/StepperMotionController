@@ -81,7 +81,7 @@ typedef struct {
     stepper_axis_params_t ap;
     stepper_motion_params_t mp;
     stepper_pulse_timer_t* pulse_timer;
-    stepper_counter_timer_t* count_timer;
+    stepper_counter_timer_t* count_timer;   
     uint32_t update_rate_ms;
 } stepper_motor_t;
 
@@ -143,7 +143,15 @@ void stepper_encode_reply( uint8_t* reply_buffer, stepper_reply_t* cmd );
 void istepper_calculate_motion_params(stepper_motor_t* motor);
 void istepper_set_pulse_timer(stepper_motor_t* handle);
 void istepper_finish_movement(stepper_motor_t* motor);
+uint8_t istepper_limit_halt_move(stepper_motor_t* motor);
 
+static inline void istepper_enable_pulse_tim(stepper_motor_t* motor){
+     motor->pulse_timer->htim->Instance->CR1 |= TIM_CR1_CEN;
+}
+
+static inline void istepper_disable_pulse_tim(stepper_motor_t* motor){
+     motor->pulse_timer->htim->Instance->CR1 &= ~TIM_CR1_CEN;
+}
 uint32_t stepper_get_axis_param(stepper_motor_t* motor, AxisParamType param);
 
 #endif

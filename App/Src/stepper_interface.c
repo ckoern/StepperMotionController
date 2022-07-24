@@ -53,15 +53,16 @@ void stepper_start_movement( stepper_motor_t* motor, int32_t target ){
     motor->count_timer->htim->Instance->CNT = 0;
     istepper_set_pulse_timer(motor);
 	//HAL_TIM_PWM_Start(motor->pulse_timer->htim, motor->pulse_timer->channel);
-    motor->pulse_timer->htim->Instance->CR1 |= TIM_CR1_CEN;
+    //motor->pulse_timer->htim->Instance->CR1 |= TIM_CR1_CEN;
+    istepper_enable_pulse_tim(motor);
 }
 
 
 void istepper_finish_movement(stepper_motor_t* motor){
 
     //HAL_TIM_PWM_Stop(motor->pulse_timer->htim, motor->pulse_timer->channel);
-    motor->pulse_timer->htim->Instance->CR1 &= ~TIM_CR1_CEN;
-
+    //motor->pulse_timer->htim->Instance->CR1 &= ~TIM_CR1_CEN;
+    istepper_disable_pulse_tim(motor);
 	motor->ap.actual_position = motor->mp.start_position + motor->mp.direction * motor->mp.nsteps;
     motor->ap.actual_speed = 0;
 	motor->ap.target_position_reached = 1;
@@ -91,6 +92,13 @@ void stepper_update_loop(stepper_motor_t* motor){
     // TODO check endstops
     if (motor->mp.finish_move){
     	istepper_finish_movement(motor);
+    }else{
+        // Check the limit switch and dis- / enable pulse timer
+        if (istepper_limit_halt_move(motor)){
+            istepper_disable_pulse_tim(motor);
+        }else{
+            istepper_enable_pulse_tim(motor);
+        }
     }
     uint32_t tick = HAL_GetTick();
     uint32_t last_tick = motor->mp.last_tick;
@@ -128,7 +136,19 @@ void stepper_update_loop(stepper_motor_t* motor){
     }
 }
 
-
+uint8_t istepper_limit_halt_move(stepper_motor_t* motor){
+    uint8_t switch_to_check;
+    if (motor->mp.direction > 0){
+        switch_to_check = motor->ap.limits_switched? LEFT_SWITCH : RIGHT_SWITCH;
+    }
+    else{
+        switch_to_check = motor->ap.limits_switched? RIGHT_SWITCH : LEFT_SWITCH;
+    }
+    if (!( motor->ap.limits_disabled & switch_to_check )){
+        return ( motor->ap.limits_polarity^motor->ap.limit_states ) & switch_to_check;
+    }
+    return 0;
+}
 
 void stepper_handle_command( stepper_motor_t* motor, stepper_command_t* cmd, stepper_reply_t* reply ){
     reply->cmd_id = cmd->cmd_id;
