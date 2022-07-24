@@ -228,6 +228,7 @@ uint32_t stepper_get_axis_param(stepper_motor_t* motor, AxisParamType param){
         }
         case AP_HOME_SW_STATE:{
             ret_val = motor->ap.limit_states & HOME_SWITCH;
+            break;
         }
         case AP_RIGHT_SW_STATE:{
             ret_val = motor->ap.limit_states & RIGHT_SWITCH;
@@ -259,6 +260,7 @@ uint32_t stepper_get_axis_param(stepper_motor_t* motor, AxisParamType param){
         }
         case AP_MICROSTEP_RESOLUTION:{
             ret_val = motor->ap.microstep_resolution;
+            break;
         }
         case AP_ENDS_DISTANCE:{
             ret_val = motor->ap.end_switch_distance;
@@ -271,6 +273,100 @@ uint32_t stepper_get_axis_param(stepper_motor_t* motor, AxisParamType param){
     };
     return ret_val;
 }
+
+StepperStatusCode set_get_axis_param(stepper_motor_t* motor, AxisParamType param, uint32_t value_enc){
+    
+    switch (param){
+        case AP_TARGET_POS:{
+            return SSC_INVALID_TYPE;
+        }
+        case AP_ACTUAL_POS:{
+            return SSC_INVALID_TYPE;
+        }
+        case AP_TARGET_VEL:{
+            memcpy(&(motor->ap.target_speed), &value_enc,4);
+            return SSC_OK;
+        }
+        case AP_ACTUAL_VEL:{
+            return SSC_INVALID_TYPE;
+        }
+        case AP_MAX_VEL:{
+            memcpy(&(motor->ap.maximum_speed), &value_enc,4);
+            return SSC_OK;
+        }
+        case AP_MAX_ACC:{
+            memcpy(&(motor->ap.acceleration), &value_enc,4);
+            return SSC_OK;
+        }
+        case AP_POS_REACHED:{
+            return SSC_INVALID_TYPE;
+        }
+        case AP_HOME_SW_STATE:{
+            return SSC_INVALID_TYPE;
+        }
+        case AP_RIGHT_SW_STATE:{
+            return SSC_INVALID_TYPE;
+        }
+        case AP_LEFT_SW_STATE:{
+            return SSC_INVALID_TYPE;
+        }
+        case AP_RIGHT_SW_DISABLE:{
+            if (value_enc > 0){
+                motor->ap.limits_disabled |= RIGHT_SWITCH;
+            }else{
+                motor->ap.limits_disabled &= ~RIGHT_SWITCH;
+            }
+            return SSC_OK;
+        }
+        case AP_LEFT_SW_DISABLE:{
+            if (value_enc > 0){
+                motor->ap.limits_disabled |= LEFT_SWITCH;
+            }else{
+                motor->ap.limits_disabled &= ~LEFT_SWITCH;
+            }
+            return SSC_OK;
+        }
+        case AP_SWAP_LIMITS:{
+            motor->ap.limits_switched = value_enc > 0? 1 : 0;
+            break;
+        }
+        case AP_RIGHT_SW_POLAR:{
+            if (value_enc > 0){
+                motor->ap.limits_polarity |= RIGHT_SWITCH;
+            }else{
+                motor->ap.limits_polarity &= ~RIGHT_SWITCH;
+            }
+            return SSC_OK;
+        }
+        case AP_LEFT_SW_POLAR:{
+            if (value_enc > 0){
+                motor->ap.limits_polarity |= LEFT_SWITCH;
+            }else{
+                motor->ap.limits_polarity &= ~LEFT_SWITCH;
+            }
+            return SSC_OK;
+        }
+        case AP_MICROSTEP_RESOLUTION:{
+            if (value_enc <= 4){
+                motor->ap.microstep_resolution = value_enc;
+                return SSC_OK;
+            }
+            else{
+                return SSC_INVALID_VALUE;
+            }
+        }
+        case AP_ENDS_DISTANCE:{
+            return SSC_INVALID_TYPE;
+        }
+        case AP_REVERSE_SHAFT:{
+            motor->ap.reverse_shaft = value_enc > 0? 1 : 0;
+            return SSC_OK;
+        }
+        default: return SSC_INVALID_TYPE;
+    };
+    return SSC_OK;
+}
+
 
 void stepper_decode_command( uint8_t* cmd_buffer, stepper_command_t* cmd ){
     cmd->module_address = cmd_buffer[0];

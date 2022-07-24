@@ -153,5 +153,6 @@ static inline void istepper_disable_pulse_tim(stepper_motor_t* motor){
      motor->pulse_timer->htim->Instance->CR1 &= ~TIM_CR1_CEN;
 }
 uint32_t stepper_get_axis_param(stepper_motor_t* motor, AxisParamType param);
+StepperStatusCode set_get_axis_param(stepper_motor_t* motor, AxisParamType param, uint32_t value_enc);
 
 #endif
