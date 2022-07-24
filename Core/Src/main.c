@@ -67,11 +67,13 @@ UART_HandleTypeDef huart2;
 volatile int8_t button_pressed = 0;
 volatile int8_t command_received = 0;
 volatile int8_t reply_sent = 1; // set to one, so first com_loop will start receive interrupt
+volatile int8_t limit_state_changed = 1; // set to one, so first check will initialize the limit state
 uint32_t BASE_CLK = 20000; // TIM1 input frequency
 
 stepper_motor_t stepper;
 stepper_counter_timer_t stepper_counter_timer;
 stepper_pulse_timer_t stepper_pulse_timer;
+stepper_motor_gpio_t stepper_io;
 stepper_com_buffer_t stepper_com_buffer;
 /* USER CODE END PV */
 
@@ -97,11 +99,18 @@ void init_stepper(){
 	stepper_counter_timer.htim = &htim2;
 	stepper_counter_timer.channel = TIM_CHANNEL_1;
 
+  stepper_io.port = MOT_DIR_GPIO_Port;
+  stepper_io.pin_direction = MOT_DIR_Pin;
+  stepper_io.pin_ms0 = MOT_MS0_Pin;
+  stepper_io.pin_ms1 = MOT_MS1_Pin;
+  stepper_io.pin_ms2 = MOT_MS2_Pin;
+  stepper_io.pin_left_limit = MOT_LS_Pin;
+  stepper_io.pin_right_limit = MOT_RS_Pin;
 
 	stepper.pulse_timer = &stepper_pulse_timer;
 	stepper.count_timer = &stepper_counter_timer;
-
-    stepper.pulse_timer->htim->Instance->CR1 &= ~TIM_CR1_CEN;
+  stepper.io = &stepper_io;
+  stepper.pulse_timer->htim->Instance->CR1 &= ~TIM_CR1_CEN;
 
 	stepper.update_rate_ms = SPEED_UPDATE_RATE_MS;
 
@@ -238,6 +247,20 @@ void uart_communication(){
     //TODO start new transmit
   }
 }
+
+void update_limit_states(){
+	uint8_t val = 0;
+	// TODO Home Switch
+	// inputs have pull ups and switches should pull pin to ground,
+	// so pin high is switch not triggered
+	if (!HAL_GPIO_ReadPin(MOT_LS_GPIO_Port, MOT_LS_Pin)){
+		val |= LEFT_SWITCH;
+	}
+	if (!HAL_GPIO_ReadPin(MOT_RS_GPIO_Port, MOT_RS_Pin)){
+		val |= RIGHT_SWITCH;
+	}
+	stepper.ap.limit_states = val;
+}
 /* USER CODE END 0 */
 
 /**
@@ -296,13 +319,17 @@ int main(void)
 
   init_stepper();
 
-  stepper_start_movement(&stepper, 150);
+  //stepper_start_movement(&stepper, 150);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  if (limit_state_changed){
+		  update_limit_states();
+		  limit_state_changed = 0;
+	  }
 	  uart_communication();
 	  check_restart(&stepper);
 	  //update_speed(&movement_setup);
@@ -561,8 +588,8 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pins : MOT_RS_Pin MOT_LS_Pin */
   GPIO_InitStruct.Pin = MOT_RS_Pin|MOT_LS_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
@@ -591,6 +618,9 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     if(GPIO_Pin == B1_Pin) // If The INT Source Is EXTI Line9 (A9 Pin)
     {
     	button_pressed = 1;
+    }
+    if (GPIO_Pin & (MOT_LS_Pin|MOT_RS_Pin)  ){
+    	limit_state_changed = 1;
     }
 }
 

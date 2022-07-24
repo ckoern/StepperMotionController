@@ -26,6 +26,7 @@ axis_params = dict(
     AP_RIGHT_SW_DISABLE = (12, "I"),
     AP_LEFT_SW_DISABLE = (13, "I"),
     AP_SWAP_LIMITS = (14, "I"),
+    AP_START_VEL = (19, "I"),
     AP_RIGHT_SW_POLAR = (24, "I"),
     AP_LEFT_SW_POLAR = (25, "I"),
     AP_MICROSTEP_RESOLUTION = (140, "I"),

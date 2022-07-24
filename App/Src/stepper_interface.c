@@ -52,7 +52,10 @@ void stepper_start_movement( stepper_motor_t* motor, int32_t target ){
     motor->count_timer->htim->Instance->ARR = motor->mp.nsteps - 1;
     motor->count_timer->htim->Instance->CNT = 0;
 
-    // TODO : Set direction and MS pins
+    // Set direction and MS pins
+    istepper_set_microstepping_pins(motor);
+    istepper_set_direction_pin(motor);
+
     istepper_set_pulse_timer(motor);
 	//HAL_TIM_PWM_Start(motor->pulse_timer->htim, motor->pulse_timer->channel);
     //motor->pulse_timer->htim->Instance->CR1 |= TIM_CR1_CEN;
@@ -188,10 +191,11 @@ void istepper_set_microstepping_pins(stepper_motor_t* handle){
 
 void istepper_set_direction_pin(stepper_motor_t* handle){
 
+
     HAL_GPIO_WritePin(
         handle->io->port, 
         handle->io->pin_direction, 
-        handle->mp.direction > 0? GPIO_PIN_SET : GPIO_PIN_RESET
+        ((handle->mp.direction > 0) != (handle->ap.reverse_shaft == 0) )? GPIO_PIN_SET : GPIO_PIN_RESET
     );
 
 }
@@ -275,35 +279,39 @@ uint32_t stepper_get_axis_param(stepper_motor_t* motor, AxisParamType param){
             break;
         }
         case AP_HOME_SW_STATE:{
-            ret_val = motor->ap.limit_states & HOME_SWITCH;
+            ret_val = (motor->ap.limit_states & HOME_SWITCH) > 0;
             break;
         }
         case AP_RIGHT_SW_STATE:{
-            ret_val = motor->ap.limit_states & RIGHT_SWITCH;
+            ret_val = (motor->ap.limit_states & RIGHT_SWITCH) > 0;
             break;
         }
         case AP_LEFT_SW_STATE:{
-            ret_val = motor->ap.limit_states & LEFT_SWITCH;
+            ret_val = (motor->ap.limit_states & LEFT_SWITCH) > 0;
             break;
         }
         case AP_RIGHT_SW_DISABLE:{
-            ret_val = motor->ap.limits_disabled & RIGHT_SWITCH;
+            ret_val = (motor->ap.limits_disabled & RIGHT_SWITCH) > 0;
             break;
         }
         case AP_LEFT_SW_DISABLE:{
-            ret_val = motor->ap.limits_disabled & LEFT_SWITCH;
+            ret_val = (motor->ap.limits_disabled & LEFT_SWITCH) > 0;
             break;
         }
         case AP_SWAP_LIMITS:{
             ret_val = motor->ap.limits_switched;
             break;
         }
+        case AP_START_VEL: {
+            memcpy(&ret_val, &(motor->ap.minimum_speed),4);
+            break;
+        }
         case AP_RIGHT_SW_POLAR:{
-            ret_val = motor->ap.limits_polarity & RIGHT_SWITCH;
+            ret_val = (motor->ap.limits_polarity & RIGHT_SWITCH) > 0;
             break;
         }
         case AP_LEFT_SW_POLAR:{
-            ret_val = motor->ap.limits_polarity & LEFT_SWITCH;
+            ret_val = (motor->ap.limits_polarity & LEFT_SWITCH) > 0;
             break;
         }
         case AP_MICROSTEP_RESOLUTION:{
@@ -376,7 +384,11 @@ StepperStatusCode stepper_set_axis_param(stepper_motor_t* motor, AxisParamType p
         }
         case AP_SWAP_LIMITS:{
             motor->ap.limits_switched = value_enc > 0? 1 : 0;
-            break;
+            return SSC_OK;
+        }
+        case AP_START_VEL:{
+            memcpy(&(motor->ap.minimum_speed), &value_enc,4);
+            return SSC_OK;
         }
         case AP_RIGHT_SW_POLAR:{
             if (value_enc > 0){

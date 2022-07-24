@@ -75,8 +75,10 @@ void Error_Handler(void);
 #define MOT_DIR_GPIO_Port GPIOB
 #define MOT_RS_Pin GPIO_PIN_14
 #define MOT_RS_GPIO_Port GPIOB
+#define MOT_RS_EXTI_IRQn EXTI15_10_IRQn
 #define MOT_LS_Pin GPIO_PIN_15
 #define MOT_LS_GPIO_Port GPIOB
+#define MOT_LS_EXTI_IRQn EXTI15_10_IRQn
 #define TMS_Pin GPIO_PIN_13
 #define TMS_GPIO_Port GPIOA
 #define TCK_Pin GPIO_PIN_14
