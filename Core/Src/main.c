@@ -49,7 +49,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define SPEED_UPDATE_RATE_MS 100
+#define SPEED_UPDATE_RATE_MS 10
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/

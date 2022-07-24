@@ -5,7 +5,7 @@ script_path = os.path.dirname(os.path.realpath(__file__))
 com_port = "COM3"
 subprocess.call( [ 
     "python",
-    os.path.join( script_path, "sent_packet.py" ),
+    os.path.join( script_path, "send_packet.py" ),
     com_port,
     "SAP",
     "-t",
@@ -16,7 +16,7 @@ subprocess.call( [
 
 subprocess.call( [ 
     "python",
-    os.path.join( script_path, "sent_packet.py" ),
+    os.path.join( script_path, "send_packet.py" ),
     com_port,
     "SAP",
     "-t",
@@ -27,18 +27,18 @@ subprocess.call( [
 
 subprocess.call( [ 
     "python",
-    os.path.join( script_path, "sent_packet.py" ),
+    os.path.join( script_path, "send_packet.py" ),
     com_port,
     "SAP",
     "-t",
     "AP_START_VEL",
     "-v",
-    "20"
+    "100"
  ] )
 
 subprocess.call( [ 
     "python",
-    os.path.join( script_path, "sent_packet.py" ),
+    os.path.join( script_path, "send_packet.py" ),
     com_port,
     "SAP",
     "-t",

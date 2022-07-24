@@ -347,8 +347,14 @@ StepperStatusCode stepper_set_axis_param(stepper_motor_t* motor, AxisParamType p
             return SSC_INVALID_TYPE;
         }
         case AP_MAX_VEL:{
-            memcpy(&(motor->ap.maximum_speed), &value_enc,4);
-            return SSC_OK;
+            uint32_t buf;
+            memcpy(&(buf), &value_enc,4);
+            if (buf <= motor->pulse_timer->base_clk/2){
+                motor->ap.maximum_speed = buf;
+                return SSC_OK;
+            }else{
+                return SSC_INVALID_VALUE;
+            }
         }
         case AP_MAX_ACC:{
             memcpy(&(motor->ap.acceleration), &value_enc,4);
