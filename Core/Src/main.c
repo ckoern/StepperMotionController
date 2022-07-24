@@ -67,7 +67,7 @@ UART_HandleTypeDef huart2;
 volatile int8_t button_pressed = 0;
 volatile int8_t command_received = 0;
 volatile int8_t reply_sent = 1; // set to one, so first com_loop will start receive interrupt
-uint32_t BASE_CLK = 5000; // TIM1 input frequency
+uint32_t BASE_CLK = 20000; // TIM1 input frequency
 
 stepper_motor_t stepper;
 stepper_counter_timer_t stepper_counter_timer;
@@ -381,7 +381,7 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 16800-1;
+  htim1.Init.Prescaler = 4200-1;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim1.Init.Period = 65535;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -536,6 +536,9 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
 
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, MOT_MS2_Pin|MOT_DIR_Pin|MOT_MS0_Pin|MOT_MS1_Pin, GPIO_PIN_RESET);
+
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
@@ -548,6 +551,19 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LD2_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : MOT_MS2_Pin MOT_DIR_Pin MOT_MS0_Pin MOT_MS1_Pin */
+  GPIO_InitStruct.Pin = MOT_MS2_Pin|MOT_DIR_Pin|MOT_MS0_Pin|MOT_MS1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : MOT_RS_Pin MOT_LS_Pin */
+  GPIO_InitStruct.Pin = MOT_RS_Pin|MOT_LS_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
   HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);

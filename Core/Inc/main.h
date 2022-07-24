@@ -69,12 +69,24 @@ void Error_Handler(void);
 #define USART_RX_GPIO_Port GPIOA
 #define LD2_Pin GPIO_PIN_5
 #define LD2_GPIO_Port GPIOA
+#define MOT_MS2_Pin GPIO_PIN_1
+#define MOT_MS2_GPIO_Port GPIOB
+#define MOT_DIR_Pin GPIO_PIN_10
+#define MOT_DIR_GPIO_Port GPIOB
+#define MOT_RS_Pin GPIO_PIN_14
+#define MOT_RS_GPIO_Port GPIOB
+#define MOT_LS_Pin GPIO_PIN_15
+#define MOT_LS_GPIO_Port GPIOB
 #define TMS_Pin GPIO_PIN_13
 #define TMS_GPIO_Port GPIOA
 #define TCK_Pin GPIO_PIN_14
 #define TCK_GPIO_Port GPIOA
 #define SWO_Pin GPIO_PIN_3
 #define SWO_GPIO_Port GPIOB
+#define MOT_MS0_Pin GPIO_PIN_4
+#define MOT_MS0_GPIO_Port GPIOB
+#define MOT_MS1_Pin GPIO_PIN_5
+#define MOT_MS1_GPIO_Port GPIOB
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */
