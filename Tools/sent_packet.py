@@ -5,7 +5,7 @@ import struct
 
 parser = ArgumentParser()
 parser.add_argument("com_port", type=str)
-parser.add_argument("cmd", type=str, choices=["MVP", "GAP", "SAP"])
+parser.add_argument("cmd", type=str, choices=["MVP", "MST", "GAP", "SAP"])
 
 parser.add_argument("-v", "--value", type = int)
 parser.add_argument("-t", "--type", type = str)
@@ -60,3 +60,11 @@ elif args.cmd == "SAP":
     reply = ser.read(9)
     _,_,sc,_,v,_ = struct.unpack( f'>BBBB{pid_type}B', reply )
     print( f"{name}: {v if sc == 100 else f'ERR({sc})'}" )
+
+elif args.cmd == "MST":
+    target = args.value
+    cmd_data = struct.pack( ">BBBBiB", 0,3,0,0,0,0 )
+    ser.write(cmd_data)
+
+    reply = ser.read(9)
+    print( f"{struct.unpack( '>BBBBIB', reply )}" )
