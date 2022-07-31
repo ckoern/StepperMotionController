@@ -94,13 +94,13 @@ void stepper_update_loop(stepper_motor_t* motor){
     }
 
 
-    // TODO check endstops
     if (motor->mp.finish_move){
     	istepper_finish_movement(motor);
     }else{
         // Check the limit switch and dis- / enable pulse timer
         if (istepper_limit_halt_move(motor)){
             istepper_disable_pulse_tim(motor);
+            // TODO Reference search branch can be added here
         }else{
             istepper_enable_pulse_tim(motor);
         }
@@ -201,24 +201,24 @@ void istepper_set_direction_pin(stepper_motor_t* handle){
 }
 
 
-void stepper_handle_command( stepper_motor_t* motor, stepper_command_t* cmd, stepper_reply_t* reply ){
+void stepper_handle_command( stepper_board_t* board, stepper_command_t* cmd, stepper_reply_t* reply ){
     reply->cmd_id = cmd->cmd_id;
     reply->status_code = SSC_OK;
     switch( cmd->cmd_id ){
         case CMD_STOP:{
-            if (!motor->ap.target_position_reached){
-                stepper_stop_movement(motor);
+            if (!board->motor->ap.target_position_reached){
+                stepper_stop_movement(board->motor);
             }
             break;
         }
         case CMD_MOVE: {
-            if (motor->ap.target_position_reached){
+            if (board->motor->ap.target_position_reached){
                 int32_t target_pos;
                 memcpy( &target_pos, &(cmd->value), 4 );
                 if (cmd->cmd_type == 1){
-                    target_pos += motor->ap.actual_position;
+                    target_pos += board->motor->ap.actual_position;
                 }
-                stepper_start_movement(motor, target_pos);
+                stepper_start_movement(board->motor, target_pos);
             }
             else{
                 reply->status_code = SSC_INVALID_CMD;
@@ -227,12 +227,12 @@ void stepper_handle_command( stepper_motor_t* motor, stepper_command_t* cmd, ste
         }
 
         case CMD_SETAP: {
-            reply->status_code = stepper_set_axis_param(motor, cmd->cmd_type, cmd->value);
-            reply->value = stepper_get_axis_param(motor, cmd->cmd_type);
+            reply->status_code = stepper_set_axis_param(board->motor, cmd->cmd_type, cmd->value);
+            reply->value = stepper_get_axis_param(board->motor, cmd->cmd_type);
         }
 
         case CMD_GETAP:{
-            reply->value = stepper_get_axis_param(motor, cmd->cmd_type);
+            reply->value = stepper_get_axis_param(board->motor, cmd->cmd_type);
             break;
         }
 
@@ -472,13 +472,13 @@ void stepper_encode_reply( uint8_t* reply_buffer, stepper_reply_t* reply ){
 
 
 
-void stepper_com_action(stepper_motor_t* motor, stepper_com_buffer_t* com_buffer){
+void stepper_com_action(stepper_board_t* board){
     static stepper_command_t cmd;
     static stepper_reply_t reply;
 
-    reply.status_code = stepper_decode_command( com_buffer->cmd_buffer, &cmd );
+    reply.status_code = stepper_decode_command( board->com_buffer.cmd_buffer, &cmd );
     if (reply.status_code == SSC_OK){
-        stepper_handle_command(motor, &cmd, &reply);
+        stepper_handle_command(board, &cmd, &reply);
     }
-    stepper_encode_reply(com_buffer->reply_buffer, &reply);
+    stepper_encode_reply(board->com_buffer.reply_buffer, &reply);
 }

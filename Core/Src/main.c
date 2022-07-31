@@ -70,11 +70,11 @@ volatile int8_t reply_sent = 1; // set to one, so first com_loop will start rece
 volatile int8_t limit_state_changed = 1; // set to one, so first check will initialize the limit state
 uint32_t BASE_CLK = 20000; // TIM1 input frequency
 
-stepper_motor_t stepper;
+stepper_motor_t stepper_motor;
 stepper_counter_timer_t stepper_counter_timer;
 stepper_pulse_timer_t stepper_pulse_timer;
 stepper_motor_gpio_t stepper_io;
-stepper_com_buffer_t stepper_com_buffer;
+stepper_board_t stepper_board;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -107,21 +107,24 @@ void init_stepper(){
   stepper_io.pin_left_limit = MOT_LS_Pin;
   stepper_io.pin_right_limit = MOT_RS_Pin;
 
-	stepper.pulse_timer = &stepper_pulse_timer;
-	stepper.count_timer = &stepper_counter_timer;
-  stepper.io = &stepper_io;
-  stepper.pulse_timer->htim->Instance->CR1 &= ~TIM_CR1_CEN;
+	stepper_motor.pulse_timer = &stepper_pulse_timer;
+	stepper_motor.count_timer = &stepper_counter_timer;
+  stepper_motor.io = &stepper_io;
+  stepper_motor.pulse_timer->htim->Instance->CR1 &= ~TIM_CR1_CEN;
 
-	stepper.update_rate_ms = SPEED_UPDATE_RATE_MS;
+	stepper_motor.update_rate_ms = SPEED_UPDATE_RATE_MS;
 
-	stepper.ap.acceleration = 1;
-	stepper.ap.minimum_speed = 2;
-	stepper.ap.maximum_speed = 10;
-	stepper.ap.actual_position = 0;
-	stepper.ap.target_position = 0;
-	stepper.ap.actual_speed = 0;
-	stepper.ap.target_position_reached = 1;
-	stepper.ap.target_speed = stepper.ap.actual_speed;
+	stepper_motor.ap.acceleration = 1;
+	stepper_motor.ap.minimum_speed = 2;
+	stepper_motor.ap.maximum_speed = 10;
+	stepper_motor.ap.actual_position = 0;
+	stepper_motor.ap.target_position = 0;
+	stepper_motor.ap.actual_speed = 0;
+	stepper_motor.ap.target_position_reached = 1;
+	stepper_motor.ap.target_speed = stepper_motor.ap.actual_speed;
+
+  stepper_board.motor = &stepper_motor;
+  stepper_board.huart = &huart2;
 }
 
 
@@ -137,90 +140,6 @@ int _write(int file, char *ptr, int len)
 	return len;
 }
 
-//void calculate_ramp(MovementSetupTypeDef* handle){
-//	// for min_speed = 0
-//	// uint32_t deltaS_ramp = max_speed*max_speed/acceleration/2;
-//
-//	// for min_speed > 0
-//	uint32_t dv = handle->max_speed - handle->min_speed;
-//	uint32_t deltaS_ramp = dv*dv/handle->acceleration/2 + handle->min_speed * dv / handle->acceleration;
-//
-//	//deltaS_ramp is the number of steps that is needed to complete a (de)acceleration ramp
-//
-//	// if total length is shorter than combined acceleration/deacceleration
-//	// accelerate until half of the distance, then deacclerate
-//	if (2*deltaS_ramp > handle->nsteps){
-//		deltaS_ramp = handle->nsteps/2;
-//	}
-//	handle->nstep_stopacc = deltaS_ramp;
-//	handle->nstep_startdec = handle->nsteps - deltaS_ramp;
-//	handle->dv_update = handle->acceleration * SPEED_UPDATE_RATE_MS / 1000;
-//}
-//
-//void _set_speed(MovementSetupTypeDef* handle, uint32_t target_speed){
-//	handle->tim_pulse->ARR = (BASE_CLK / target_speed / handle->scale) - 1;
-//	handle->tim_pulse->CCR1 = BASE_CLK / target_speed / handle->scale / 2;
-//	if (handle->tim_pulse->CNT >= handle->tim_pulse->ARR){
-//		handle->tim_pulse->CNT=0; // reset the counter if the new ARR is lower than the current count
-//	}
-//
-//}
-//void update_speed(MovementSetupTypeDef* handle){
-//	static int32_t last_tick = 0;
-//	int32_t tick = HAL_GetTick();
-//	if (last_tick > tick){
-//		// ticker overflow, unlikely to ever occur for 1ms ticks and 32 bit
-//		last_tick = 0;
-//	}
-//	if ( !(tick - last_tick >= SPEED_UPDATE_RATE_MS) ){
-//		return;
-//	}
-//	last_tick = tick;
-//
-//
-//	if (!handle->in_move){
-//		return;
-//	}
-//	uint32_t arr = handle->tim_pulse->ARR;
-//	uint32_t cnt = handle->tim_cnt->CNT;
-//	uint32_t current_speed = BASE_CLK /  (arr+1);
-//	uint32_t current_nsteps = cnt;
-//
-//	uint32_t target_speed;
-//	if (current_nsteps > handle->nstep_startdec){
-////		target_speed = current_speed - handle->dv_update;
-////		if (target_speed < handle->min_speed){
-////			target_speed = handle->min_speed;
-////		}
-//		float ramp_frac = 1.0f * ( current_nsteps - handle->nstep_startdec ) / handle->nstep_stopacc;
-//		target_speed = handle->max_speed - (uint32_t)( ramp_frac*(handle->max_speed - handle->min_speed) );
-//		// v = v0 - dv*(s/ds),
-//	} else if (current_nsteps < handle->nstep_stopacc){
-////		target_speed = current_speed + handle->dv_update;
-////		if (target_speed > handle->max_speed){
-////			target_speed = handle->max_speed;
-////		}
-//		float ramp_frac = 1.0f * current_nsteps  / handle->nstep_stopacc;
-//		target_speed = handle->min_speed +  (uint32_t)( ramp_frac*(handle->max_speed - handle->min_speed) );
-//
-//	}else{
-//		target_speed = handle->max_speed;
-//
-//	}
-//	printf("%lu: CNT: %lu, ARR: %lu, TS: %lu\n", last_tick, cnt, arr, target_speed);
-//	_set_speed(handle, target_speed);
-//}
-//
-//
-//void start_move(MovementSetupTypeDef* handle){
-//	  handle->tim_cnt->ARR = handle->nsteps - 1;
-//	  handle->tim_cnt->CNT = 0;
-//	  handle->in_move = 1;
-//	  _set_speed(handle, handle->min_speed);
-//
-//	  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
-//
-//}
 
 void check_restart(stepper_motor_t* handle){
 	if (button_pressed){
@@ -234,17 +153,15 @@ void check_restart(stepper_motor_t* handle){
 
 void uart_communication(){
   if (reply_sent){
-    //TODO start new receive
-	reply_sent = 0;
-    HAL_UART_Receive_IT(&huart2, stepper_com_buffer.cmd_buffer, sizeof(stepper_com_buffer.cmd_buffer));
+  	reply_sent = 0;
+    HAL_UART_Receive_IT(stepper_board.huart, stepper_board.com_buffer.cmd_buffer, sizeof(stepper_board.com_buffer.cmd_buffer));
 
   }
   if (command_received){
 	  command_received = 0;
-    stepper_com_action(&stepper, &stepper_com_buffer);
-    HAL_UART_Transmit_IT(&huart2, stepper_com_buffer.reply_buffer, sizeof (stepper_com_buffer.reply_buffer));
+    stepper_com_action(&stepper_board);
+    HAL_UART_Transmit_IT(stepper_board.huart, stepper_board.com_buffer.reply_buffer, sizeof (stepper_board.com_buffer.reply_buffer));
 
-    //TODO start new transmit
   }
 }
 
@@ -259,7 +176,7 @@ void update_limit_states(){
 	if (!HAL_GPIO_ReadPin(MOT_RS_GPIO_Port, MOT_RS_Pin)){
 		val |= RIGHT_SWITCH;
 	}
-	stepper.ap.limit_states = val;
+	stepper_board.motor->ap.limit_states = val;
 }
 /* USER CODE END 0 */
 
@@ -331,9 +248,9 @@ int main(void)
 		  limit_state_changed = 0;
 	  }
 	  uart_communication();
-	  check_restart(&stepper);
+	  check_restart(stepper_board.motor);
 	  //update_speed(&movement_setup);
-	  stepper_update_loop(&stepper);
+	  stepper_update_loop(stepper_board.motor);
 
     /* USER CODE END WHILE */
 
@@ -605,7 +522,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
 		// TODO Stop TIM1
 	    //HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_1);
 		HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
-		stepper.mp.finish_move = 1;
+		stepper_motor.mp.finish_move = 1;
 	}
 	else if (htim == &htim1){
 //		HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);

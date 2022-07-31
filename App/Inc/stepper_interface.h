@@ -29,6 +29,10 @@ typedef struct {
     uint8_t checksum;
 } stepper_reply_t;
 
+typedef struct {
+
+} stepper_global_params_t;
+
 typedef struct{
 
     int32_t target_position;
@@ -95,10 +99,19 @@ typedef struct {
     uint32_t update_rate_ms;
 } stepper_motor_t;
 
+
 typedef struct {
     uint8_t cmd_buffer[9];
     uint8_t reply_buffer[9];
 } stepper_com_buffer_t;
+
+
+typedef struct {
+    stepper_global_params_t gp;
+    stepper_motor_t* motor; // this can be an array for multi-axis control
+    stepper_com_buffer_t com_buffer;
+    UART_HandleTypeDef* huart;
+} stepper_board_t;
 
 typedef enum {
     AP_TARGET_POS = 0,
@@ -146,8 +159,8 @@ void stepper_start_movement( stepper_motor_t* motor, int32_t target );
 void stepper_stop_movement( stepper_motor_t* motor );
 void stepper_update_loop(stepper_motor_t* motor);
 
-void stepper_com_action(stepper_motor_t* motor, stepper_com_buffer_t* com_buffer);
-void stepper_handle_command( stepper_motor_t* motor, stepper_command_t* cmd, stepper_reply_t* reply );
+void stepper_com_action(stepper_board_t* board);
+void stepper_handle_command( stepper_board_t* board, stepper_command_t* cmd, stepper_reply_t* reply );
 StepperStatusCode stepper_decode_command( uint8_t* cmd_buffer, stepper_command_t* cmd );
 void stepper_encode_reply( uint8_t* reply_buffer, stepper_reply_t* cmd );
 
