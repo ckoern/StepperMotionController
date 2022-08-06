@@ -172,9 +172,9 @@ void stepper_stop_movement( stepper_motor_t* motor );
 void stepper_update_loop(stepper_motor_t* motor);
 
 void stepper_com_action(stepper_board_t* board);
-void stepper_handle_command( stepper_board_t* board, stepper_command_t* cmd, stepper_reply_t* reply );
-StepperStatusCode stepper_decode_command( uint8_t* cmd_buffer, stepper_command_t* cmd );
-void stepper_encode_reply( uint8_t* reply_buffer, stepper_reply_t* cmd );
+void istepper_handle_command( stepper_board_t* board, stepper_command_t* cmd, stepper_reply_t* reply );
+StepperStatusCode istepper_decode_command( uint8_t* cmd_buffer, stepper_command_t* cmd );
+void istepper_encode_reply( uint8_t* reply_buffer, stepper_reply_t* cmd );
 
 void istepper_calculate_motion_params(stepper_motor_t* motor);
 void istepper_set_pulse_timer(stepper_motor_t* handle);
