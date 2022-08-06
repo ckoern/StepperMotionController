@@ -1,8 +1,13 @@
 import os 
 import subprocess
+import sys
 
 script_path = os.path.dirname(os.path.realpath(__file__))
-com_port = "COM3"
+if len(sys.argv) > 1:
+    com_port = sys.argv[1]
+else:
+    com_port = "COM3"
+
 subprocess.call( [ 
     "python",
     os.path.join( script_path, "send_packet.py" ),
@@ -11,7 +16,7 @@ subprocess.call( [
     "-t",
     "AP_MAX_VEL",
     "-v",
-    "10000"
+    "5000"
  ] )
 
 subprocess.call( [ 
@@ -22,7 +27,7 @@ subprocess.call( [
     "-t",
     "AP_MAX_ACC",
     "-v",
-    "20000"
+    "1000"
  ] )
 
 subprocess.call( [ 
