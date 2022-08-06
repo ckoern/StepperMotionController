@@ -1,6 +1,11 @@
 #include "stepper_interface.h"
 #include <string.h>
 
+/**
+ * @brief Calculate the ramp profile based on the axis_parameters store them in the motion_parameters
+ * 
+ * @param motor 
+ */
 void istepper_calculate_motion_params(stepper_motor_t* motor){
 
     motor->mp.start_position = motor->ap.actual_position;
@@ -25,6 +30,12 @@ void istepper_calculate_motion_params(stepper_motor_t* motor){
     motor->mp.nsteps_ramp = nsteps_ramp;
 }
 
+
+/**
+ * @brief Setup the pulse timer configuration based on the axis_parameters
+ * 
+ * @param handle 
+ */
 void istepper_set_pulse_timer(stepper_motor_t* handle){
     uint32_t period = handle->pulse_timer->base_clk / handle->ap.actual_speed;
     handle->pulse_timer->htim->Instance->ARR = period - 1;
@@ -36,11 +47,18 @@ void istepper_set_pulse_timer(stepper_motor_t* handle){
 }
 
 
-
+/**
+ * @brief Initiate a new movement to a given target
+ * 
+ * Calculates the ramp parameters, setup of the timers, etc
+ * 
+ * @param motor 
+ * @param target 
+ */
 void stepper_start_movement( stepper_motor_t* motor, int32_t target ){
-	// cannot start move while moving
+	// cannot start move while moving, so stop current move first
 	if (!motor->ap.target_position_reached){
-		return;
+        stepper_stop_movement(motor);
 	}
     // nothing to do when target already reached
     if (motor->ap.actual_position == target){
@@ -65,11 +83,13 @@ void stepper_start_movement( stepper_motor_t* motor, int32_t target ){
     istepper_enable_pulse_tim(motor);
 }
 
-
+/**
+ * @brief Stop pulser and set internal state to represent that the movement stopped
+ * 
+ * @param motor 
+ */
 void istepper_finish_movement(stepper_motor_t* motor){
 
-    //HAL_TIM_PWM_Stop(motor->pulse_timer->htim, motor->pulse_timer->channel);
-    //motor->pulse_timer->htim->Instance->CR1 &= ~TIM_CR1_CEN;
     istepper_disable_pulse_tim(motor);
 	motor->ap.actual_position = motor->mp.start_position + motor->mp.direction * motor->mp.nsteps;
     motor->ap.actual_speed = 0;
@@ -78,9 +98,12 @@ void istepper_finish_movement(stepper_motor_t* motor){
 
 }
 
-
+/**
+ * @brief Stop (abort) the current movement command.
+ * 
+ * @param motor 
+ */
 void stepper_stop_movement( stepper_motor_t* motor ){
-    //HAL_TIM_PWM_Stop(motor->pulse_timer->htim, motor->pulse_timer->channel);
     istepper_disable_pulse_tim(motor);
 	uint32_t current_nsteps = motor->count_timer->htim->Instance->CNT;
     motor->ap.actual_position = motor->mp.start_position + motor->mp.direction * current_nsteps;
@@ -90,6 +113,11 @@ void stepper_stop_movement( stepper_motor_t* motor ){
     motor->state = STP_IDLE;
 }
 
+/**
+ * @brief Internal handler for additional responses on blocking limit switches based on the move state
+ * 
+ * @param motor 
+ */
 void istepper_handle_limit_halted(stepper_motor_t* motor){
     // currently only simplest search is supported which is one limit
     if ( motor->state == STP_REFSEARCH_L || motor->state == STP_REFSEARCH_R  ){
@@ -99,7 +127,13 @@ void istepper_handle_limit_halted(stepper_motor_t* motor){
     }
 }
 
-
+/**
+ * @brief Main loop function to update the timers and react to state changes. 
+ * Should be called as often as possible
+ * 
+ * 
+ * @param motor 
+ */
 void stepper_update_loop(stepper_motor_t* motor){
     if (motor->state == STP_IDLE){
         return;
@@ -129,7 +163,6 @@ void stepper_update_loop(stepper_motor_t* motor){
 	if ((tick - last_tick >= motor->update_rate_ms) ){
     	motor->mp.last_tick = tick;
 
-        //uint32_t arr = motor->pulse_timer->htim->Instance->ARR;
 	    uint32_t current_nsteps = motor->count_timer->htim->Instance->CNT;
 
         motor->ap.actual_position = motor->mp.start_position + motor->mp.direction * current_nsteps;
@@ -154,6 +187,14 @@ void stepper_update_loop(stepper_motor_t* motor){
     }
 }
 
+/**
+ * @brief Check if limit switch state should stop movement
+ * 
+ * Takes into account the travel direction, switch polarity and their state 
+ * 
+ * @param motor 
+ * @return uint8_t 0 if limits are not blocking, !=0 when blocking
+ */
 uint8_t istepper_check_limit_is_halting(stepper_motor_t* motor){
     uint8_t switch_to_check;
     // in reference search mode, limits are always enabled,
@@ -174,6 +215,11 @@ uint8_t istepper_check_limit_is_halting(stepper_motor_t* motor){
     return 0;
 }
 
+/**
+ * @brief Setup configuration pins of the motor for correct microstepping settings
+ * 
+ * @param handle 
+ */
 void istepper_set_microstepping_pins(stepper_motor_t* handle){
     switch (handle->ap.microstep_resolution){
         case 0:
@@ -208,6 +254,12 @@ void istepper_set_microstepping_pins(stepper_motor_t* handle){
     }
 }
 
+
+/**
+ * @brief Set direction pin based on the direction in the motion_parameter and the shaft direction
+ * 
+ * @param handle 
+ */
 void istepper_set_direction_pin(stepper_motor_t* handle){
 
 
@@ -219,8 +271,14 @@ void istepper_set_direction_pin(stepper_motor_t* handle){
 
 }
 
-
-void stepper_handle_command( stepper_board_t* board, stepper_command_t* cmd, stepper_reply_t* reply ){
+/**
+ * @brief Execute command and fill reply buffer
+ * 
+ * @param board 
+ * @param cmd 
+ * @param reply 
+ */
+void istepper_handle_command( stepper_board_t* board, stepper_command_t* cmd, stepper_reply_t* reply ){
     reply->cmd_id = cmd->cmd_id;
     reply->status_code = SSC_OK;
     switch( cmd->cmd_id ){
@@ -231,17 +289,13 @@ void stepper_handle_command( stepper_board_t* board, stepper_command_t* cmd, ste
             break;
         }
         case CMD_MOVE: {
-            if (board->motor->ap.target_position_reached){
-                int32_t target_pos;
-                memcpy( &target_pos, &(cmd->value), 4 );
-                if (cmd->cmd_type == 1){
-                    target_pos += board->motor->ap.actual_position;
-                }
-                stepper_start_movement(board->motor, target_pos);
+            int32_t target_pos;
+            memcpy( &target_pos, &(cmd->value), 4 );
+            if (cmd->cmd_type == 1){
+                target_pos += board->motor->ap.actual_position;
             }
-            else{
-                reply->status_code = SSC_INVALID_CMD;
-            }
+            stepper_start_movement(board->motor, target_pos);
+
             break;
         }
 
@@ -479,7 +533,7 @@ StepperStatusCode stepper_set_axis_param(stepper_motor_t* motor, AxisParamType p
 }
 
 
-StepperStatusCode stepper_decode_command( uint8_t* cmd_buffer, stepper_command_t* cmd ){
+StepperStatusCode istepper_decode_command( uint8_t* cmd_buffer, stepper_command_t* cmd ){
     cmd->module_address = cmd_buffer[0];
     cmd->cmd_id = cmd_buffer[1];
     cmd->cmd_type = cmd_buffer[2];
@@ -499,7 +553,9 @@ StepperStatusCode stepper_decode_command( uint8_t* cmd_buffer, stepper_command_t
         return SSC_WRONG_CHECKSUM;
     }
 }
-void stepper_encode_reply( uint8_t* reply_buffer, stepper_reply_t* reply ){
+
+
+void istepper_encode_reply( uint8_t* reply_buffer, stepper_reply_t* reply ){
     reply_buffer[0] = reply->reply_address;
     reply_buffer[1] = reply->module_address;
     reply_buffer[2] = reply->status_code;
@@ -521,9 +577,9 @@ void stepper_com_action(stepper_board_t* board){
     static stepper_command_t cmd;
     static stepper_reply_t reply;
 
-    reply.status_code = stepper_decode_command( board->com_buffer.cmd_buffer, &cmd );
+    reply.status_code = istepper_decode_command( board->com_buffer.cmd_buffer, &cmd );
     if (reply.status_code == SSC_OK){
-        stepper_handle_command(board, &cmd, &reply);
+        istepper_handle_command(board, &cmd, &reply);
     }
-    stepper_encode_reply(board->com_buffer.reply_buffer, &reply);
+    istepper_encode_reply(board->com_buffer.reply_buffer, &reply);
 }
