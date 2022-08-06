@@ -10,6 +10,16 @@
 #define LEFT_SWITCH  ( 1 << 1 )
 #define RIGHT_SWITCH ( 1 << 2 )
 
+typedef enum {
+    STP_IDLE = 0,
+    STP_MOVETO,
+    STP_HALT,
+    STP_FINISH,
+    STP_REFSEARCH_L,
+    STP_REFSEARCH_R
+} StepperState;
+
+
 typedef struct {
     uint8_t module_address;
     uint8_t cmd_id;
@@ -50,6 +60,7 @@ typedef struct{
     uint8_t microstep_resolution;
     uint32_t end_switch_distance;
     uint8_t reverse_shaft;
+    uint8_t refsearch_mode;
 
 
 } stepper_axis_params_t;
@@ -73,8 +84,6 @@ typedef struct {
     uint32_t nsteps;
     int8_t direction;
     uint32_t nsteps_ramp;
-    uint8_t abort_move;
-    uint8_t finish_move;
     uint32_t last_tick;
     int32_t start_position;
 } stepper_motion_params_t;
@@ -97,6 +106,7 @@ typedef struct {
     stepper_counter_timer_t* count_timer;   
     stepper_motor_gpio_t* io;
     uint32_t update_rate_ms;
+    StepperState state;
 } stepper_motor_t;
 
 
@@ -131,6 +141,7 @@ typedef enum {
     AP_RIGHT_SW_POLAR = 24,
     AP_LEFT_SW_POLAR = 25,
     AP_MICROSTEP_RESOLUTION = 140,
+    AP_REFERENCE_SEARCH_MODE = 193,
     AP_ENDS_DISTANCE = 196,
     AP_REVERSE_SHAFT = 251,
 } AxisParamType;
@@ -153,6 +164,7 @@ typedef enum{
     SSC_INVALID_VALUE = 4
 } StepperStatusCode;
 
+
 // functions beginning with stepper_ are public
 // functions beginning with istepper_ are internal
 void stepper_start_movement( stepper_motor_t* motor, int32_t target );
@@ -167,18 +179,36 @@ void stepper_encode_reply( uint8_t* reply_buffer, stepper_reply_t* cmd );
 void istepper_calculate_motion_params(stepper_motor_t* motor);
 void istepper_set_pulse_timer(stepper_motor_t* handle);
 void istepper_finish_movement(stepper_motor_t* motor);
-uint8_t istepper_limit_halt_move(stepper_motor_t* motor);
+uint8_t istepper_check_limit_is_halting(stepper_motor_t* motor);
 void istepper_set_microstepping_pins(stepper_motor_t* handle);
 void istepper_set_direction_pin(stepper_motor_t* handle);
 
+void istepper_handle_limit_halted(stepper_motor_t* motor);
 
+static inline void stepper_notify_limitstate_changed(stepper_motor_t* motor){
+    uint8_t val = 0;
+	// TODO Home Switch
+	// inputs have pull ups and switches should pull pin to ground,
+	// so pin high is switch not triggered
+	if (!HAL_GPIO_ReadPin(motor->io->port, motor->io->pin_left_limit)){
+		val |= LEFT_SWITCH;
+	}
+	if (!HAL_GPIO_ReadPin(motor->io->port, motor->io->pin_right_limit)){
+		val |= RIGHT_SWITCH;
+	}
+	motor->ap.limit_states = val;
+}
+
+static inline void stepper_notify_target_reached(stepper_motor_t* motor){
+    motor->state = STP_FINISH;
+}
 
 static inline void istepper_enable_pulse_tim(stepper_motor_t* motor){
-     motor->pulse_timer->htim->Instance->CR1 |= TIM_CR1_CEN;
+    motor->pulse_timer->htim->Instance->CR1 |= TIM_CR1_CEN;
 }
 
 static inline void istepper_disable_pulse_tim(stepper_motor_t* motor){
-     motor->pulse_timer->htim->Instance->CR1 &= ~TIM_CR1_CEN;
+    motor->pulse_timer->htim->Instance->CR1 &= ~TIM_CR1_CEN;
 }
 uint32_t stepper_get_axis_param(stepper_motor_t* motor, AxisParamType param);
 StepperStatusCode stepper_set_axis_param(stepper_motor_t* motor, AxisParamType param, uint32_t value_enc);

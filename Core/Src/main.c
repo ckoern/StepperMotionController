@@ -49,7 +49,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define SPEED_UPDATE_RATE_MS 10
+#define SPEED_UPDATE_RATE_MS 1
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -116,7 +116,7 @@ void init_stepper(){
 
 	stepper_motor.ap.acceleration = 1;
 	stepper_motor.ap.minimum_speed = 2;
-	stepper_motor.ap.maximum_speed = 10;
+	stepper_motor.ap.maximum_speed = 100;
 	stepper_motor.ap.actual_position = 0;
 	stepper_motor.ap.target_position = 0;
 	stepper_motor.ap.actual_speed = 0;
@@ -165,19 +165,19 @@ void uart_communication(){
   }
 }
 
-void update_limit_states(){
-	uint8_t val = 0;
-	// TODO Home Switch
-	// inputs have pull ups and switches should pull pin to ground,
-	// so pin high is switch not triggered
-	if (!HAL_GPIO_ReadPin(MOT_LS_GPIO_Port, MOT_LS_Pin)){
-		val |= LEFT_SWITCH;
-	}
-	if (!HAL_GPIO_ReadPin(MOT_RS_GPIO_Port, MOT_RS_Pin)){
-		val |= RIGHT_SWITCH;
-	}
-	stepper_board.motor->ap.limit_states = val;
-}
+// void update_limit_states(){
+// 	uint8_t val = 0;
+// 	// TODO Home Switch
+// 	// inputs have pull ups and switches should pull pin to ground,
+// 	// so pin high is switch not triggered
+// 	if (!HAL_GPIO_ReadPin(MOT_LS_GPIO_Port, MOT_LS_Pin)){
+// 		val |= LEFT_SWITCH;
+// 	}
+// 	if (!HAL_GPIO_ReadPin(MOT_RS_GPIO_Port, MOT_RS_Pin)){
+// 		val |= RIGHT_SWITCH;
+// 	}
+// 	stepper_board.motor->ap.limit_states = val;
+// }
 /* USER CODE END 0 */
 
 /**
@@ -244,7 +244,7 @@ int main(void)
   while (1)
   {
 	  if (limit_state_changed){
-		  update_limit_states();
+		  stepper_notify_limitstate_changed(stepper_board.motor);
 		  limit_state_changed = 0;
 	  }
 	  uart_communication();
@@ -522,7 +522,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
 		// TODO Stop TIM1
 	    //HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_1);
 		HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
-		stepper_motor.mp.finish_move = 1;
+		stepper_notify_target_reached(&stepper_motor);
 	}
 	else if (htim == &htim1){
 //		HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);

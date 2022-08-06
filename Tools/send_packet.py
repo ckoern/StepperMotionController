@@ -5,7 +5,7 @@ import struct
 
 parser = ArgumentParser()
 parser.add_argument("com_port", type=str)
-parser.add_argument("cmd", type=str, choices=["MVP", "MST", "GAP", "SAP"])
+parser.add_argument("cmd", type=str, choices=["MVP", "MST", "GAP", "SAP", "RFS"])
 
 parser.add_argument("-v", "--value", type = int)
 parser.add_argument("-t", "--type", type = str)
@@ -36,6 +36,7 @@ axis_params = dict(
     AP_RIGHT_SW_POLAR = (24, "I"),
     AP_LEFT_SW_POLAR = (25, "I"),
     AP_MICROSTEP_RESOLUTION = (140, "I"),
+    AP_REFERENCE_SEARCH_MODE = (193, "I"),
     AP_ENDS_DISTANCE = (196, "I"),
     AP_REVERSE_SHAFT = (251, "I"),
 )
@@ -69,8 +70,15 @@ elif args.cmd == "SAP":
     print( f"{name}: {v if sc == 100 else f'ERR({sc})'}" )
 
 elif args.cmd == "MST":
-    target = args.value
     cmd_data = struct.pack( ">BBBBi", 0,3,0,0,0 )
+    ser.write(add_checksum(cmd_data))
+
+    reply = ser.read(9)
+    print( f"{struct.unpack( '>BBBBIB', reply )}" )
+
+
+elif args.cmd == "RFS":
+    cmd_data = struct.pack( ">BBBBi", 0,13,0,0,0 )
     ser.write(add_checksum(cmd_data))
 
     reply = ser.read(9)

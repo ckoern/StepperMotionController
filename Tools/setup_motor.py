@@ -11,7 +11,7 @@ subprocess.call( [
     "-t",
     "AP_MAX_VEL",
     "-v",
-    "500"
+    "10000"
  ] )
 
 subprocess.call( [ 
@@ -22,7 +22,7 @@ subprocess.call( [
     "-t",
     "AP_MAX_ACC",
     "-v",
-    "100"
+    "20000"
  ] )
 
 subprocess.call( [ 
@@ -33,7 +33,7 @@ subprocess.call( [
     "-t",
     "AP_START_VEL",
     "-v",
-    "100"
+    "500"
  ] )
 
 subprocess.call( [ 

@@ -4,8 +4,6 @@
 void istepper_calculate_motion_params(stepper_motor_t* motor){
 
     motor->mp.start_position = motor->ap.actual_position;
-    motor->mp.abort_move = 0;
-    motor->mp.finish_move = 0;
     motor->mp.direction = motor->ap.target_position > motor->ap.actual_position? 1 : -1;
     if (motor->mp.direction > 0){
         motor->mp.nsteps = motor->ap.target_position - motor->ap.actual_position;
@@ -44,6 +42,10 @@ void stepper_start_movement( stepper_motor_t* motor, int32_t target ){
 	if (!motor->ap.target_position_reached){
 		return;
 	}
+    // nothing to do when target already reached
+    if (motor->ap.actual_position == target){
+        return;
+    }
 	motor->ap.target_position_reached = 0;
     motor->ap.target_position = target;
     motor->mp.last_tick = HAL_GetTick();
@@ -57,6 +59,7 @@ void stepper_start_movement( stepper_motor_t* motor, int32_t target ){
     istepper_set_direction_pin(motor);
 
     istepper_set_pulse_timer(motor);
+    motor->state = STP_MOVETO;
 	//HAL_TIM_PWM_Start(motor->pulse_timer->htim, motor->pulse_timer->channel);
     //motor->pulse_timer->htim->Instance->CR1 |= TIM_CR1_CEN;
     istepper_enable_pulse_tim(motor);
@@ -71,36 +74,46 @@ void istepper_finish_movement(stepper_motor_t* motor){
 	motor->ap.actual_position = motor->mp.start_position + motor->mp.direction * motor->mp.nsteps;
     motor->ap.actual_speed = 0;
 	motor->ap.target_position_reached = 1;
-	motor->mp.finish_move = 0;
+    motor->state = STP_IDLE;
+
 }
 
 
 void stepper_stop_movement( stepper_motor_t* motor ){
     //HAL_TIM_PWM_Stop(motor->pulse_timer->htim, motor->pulse_timer->channel);
-    motor->pulse_timer->htim->Instance->CR1 &= ~TIM_CR1_CEN;
-
+    istepper_disable_pulse_tim(motor);
 	uint32_t current_nsteps = motor->count_timer->htim->Instance->CNT;
     motor->ap.actual_position = motor->mp.start_position + motor->mp.direction * current_nsteps;
     motor->ap.target_position = motor->ap.actual_position;
     motor->ap.actual_speed = 0; 
     motor->ap.target_position_reached = 1;
+    motor->state = STP_IDLE;
+}
+
+void istepper_handle_limit_halted(stepper_motor_t* motor){
+    // currently only simplest search is supported which is one limit
+    if ( motor->state == STP_REFSEARCH_L || motor->state == STP_REFSEARCH_R  ){
+        istepper_finish_movement(motor);
+        motor->ap.target_position = 0;
+        motor->ap.actual_position = 0;
+    }
 }
 
 
-
 void stepper_update_loop(stepper_motor_t* motor){
-    if (motor->ap.target_position_reached){
+    if (motor->state == STP_IDLE){
         return;
     }
 
 
-    if (motor->mp.finish_move){
+    if (motor->state == STP_FINISH){
     	istepper_finish_movement(motor);
     }else{
         // Check the limit switch and dis- / enable pulse timer
-        if (istepper_limit_halt_move(motor)){
+        if (istepper_check_limit_is_halting(motor)){
             istepper_disable_pulse_tim(motor);
-            // TODO Reference search branch can be added here
+            istepper_handle_limit_halted(motor);
+            return; //when motor is disabled, no move calculation should be performed in this iteration
         }else{
             istepper_enable_pulse_tim(motor);
         }
@@ -141,15 +154,21 @@ void stepper_update_loop(stepper_motor_t* motor){
     }
 }
 
-uint8_t istepper_limit_halt_move(stepper_motor_t* motor){
+uint8_t istepper_check_limit_is_halting(stepper_motor_t* motor){
     uint8_t switch_to_check;
+    // in reference search mode, limits are always enabled,
+    // ignoring the AP config setting 'limits_disabled'
+    uint8_t limits_disabled_mask = 0;
+    if (motor->state != STP_REFSEARCH_L && motor->state != STP_REFSEARCH_R){
+        limits_disabled_mask = motor->ap.limits_disabled;
+    } 
     if (motor->mp.direction > 0){
         switch_to_check = motor->ap.limits_switched? LEFT_SWITCH : RIGHT_SWITCH;
     }
     else{
         switch_to_check = motor->ap.limits_switched? RIGHT_SWITCH : LEFT_SWITCH;
     }
-    if (!( motor->ap.limits_disabled & switch_to_check )){
+    if (!( limits_disabled_mask & switch_to_check )){
         return ( motor->ap.limits_polarity^motor->ap.limit_states ) & switch_to_check;
     }
     return 0;
@@ -237,6 +256,17 @@ void stepper_handle_command( stepper_board_t* board, stepper_command_t* cmd, ste
         }
 
         case CMD_REFSEARCH :{
+            if (board->motor->ap.refsearch_mode == 1){
+                stepper_start_movement(board->motor, INT32_MIN);
+                board->motor->state = STP_REFSEARCH_L;
+            }
+            else if (board->motor->ap.refsearch_mode == 65){
+                stepper_start_movement(board->motor, INT32_MAX);
+                board->motor->state = STP_REFSEARCH_R;
+            }
+            else{
+                reply->status_code = SSC_INVALID_VALUE;
+            }
             break;
         }
 
@@ -247,7 +277,8 @@ void stepper_handle_command( stepper_board_t* board, stepper_command_t* cmd, ste
 }
 
 uint32_t stepper_get_axis_param(stepper_motor_t* motor, AxisParamType param){
-    
+    // memcpy is used to reinterpret the signed axis parameters into
+    // the uint32 of the packet
     uint32_t ret_val;
     switch (param){
         case AP_TARGET_POS:{
@@ -318,6 +349,10 @@ uint32_t stepper_get_axis_param(stepper_motor_t* motor, AxisParamType param){
             ret_val = motor->ap.microstep_resolution;
             break;
         }
+        case AP_REFERENCE_SEARCH_MODE: {
+            ret_val = motor->ap.refsearch_mode;
+            break;
+        }
         case AP_ENDS_DISTANCE:{
             ret_val = motor->ap.end_switch_distance;
             break;
@@ -331,7 +366,8 @@ uint32_t stepper_get_axis_param(stepper_motor_t* motor, AxisParamType param){
 }
 
 StepperStatusCode stepper_set_axis_param(stepper_motor_t* motor, AxisParamType param, uint32_t value_enc){
-    
+    // memcpy is used to reinterpret the uint32 datatype of the packet
+    // as int32 for signed axis parameters 
     switch (param){
         case AP_TARGET_POS:{
             return SSC_INVALID_TYPE;
@@ -415,6 +451,15 @@ StepperStatusCode stepper_set_axis_param(stepper_motor_t* motor, AxisParamType p
         case AP_MICROSTEP_RESOLUTION:{
             if (value_enc <= 4){
                 motor->ap.microstep_resolution = value_enc;
+                return SSC_OK;
+            }
+            else{
+                return SSC_INVALID_VALUE;
+            }
+        }
+        case AP_REFERENCE_SEARCH_MODE: {
+            if (value_enc == 1 || value_enc == 65){
+                motor->ap.refsearch_mode = value_enc;
                 return SSC_OK;
             }
             else{
